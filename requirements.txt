@@ -1,0 +1,13 @@
+# Core dependencies for Stage 1
+gradio>=5.0.0
+requests==2.31.0
+pydantic==2.9.0
+pydantic-settings==2.5.0
+python-dotenv==1.0.0
+huggingface-hub>=0.26.0
+pillow==10.4.0
+
+# Testing dependencies
+pytest==8.3.4
+pytest-cov==6.0.0
+responses==0.25.3
