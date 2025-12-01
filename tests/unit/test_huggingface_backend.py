@@ -45,7 +45,7 @@ class TestHuggingFaceBackend:
 
         assert isinstance(models, list)
         assert len(models) > 0
-        assert "stabilityai/stable-diffusion-2-1" in models
+        assert "black-forest-labs/FLUX.1-schnell" in models
 
     @patch('src.backends.huggingface.InferenceClient')
     def test_generate_image_success(self, mock_client_class):

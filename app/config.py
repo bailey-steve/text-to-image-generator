@@ -33,6 +33,8 @@ class Settings(BaseSettings):
 
     # Application Settings
     default_backend: str = "huggingface"
+    fallback_backend: Optional[str] = None
+    enable_fallback: bool = False
     log_level: str = "INFO"
     max_retries: int = 3
     timeout: int = 60
@@ -52,6 +54,24 @@ class Settings(BaseSettings):
                 "Please set it in your .env file or environment variables. "
                 "Get your token from: https://huggingface.co/settings/tokens"
             )
+
+        if not self.replicate_token and self.default_backend == "replicate":
+            raise ValueError(
+                "REPLICATE_TOKEN is required when using the Replicate backend. "
+                "Please set it in your .env file or environment variables. "
+                "Get your token from: https://replicate.com/account/api-tokens"
+            )
+
+        # Validate fallback backend has token
+        if self.enable_fallback and self.fallback_backend:
+            if self.fallback_backend == "replicate" and not self.replicate_token:
+                raise ValueError(
+                    "REPLICATE_TOKEN is required when using Replicate as fallback backend."
+                )
+            elif self.fallback_backend == "huggingface" and not self.huggingface_token:
+                raise ValueError(
+                    "HUGGINGFACE_TOKEN is required when using HuggingFace as fallback backend."
+                )
 
 
 # Global settings instance

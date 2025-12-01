@@ -7,6 +7,10 @@ python-dotenv==1.0.0
 huggingface-hub>=0.26.0
 pillow==10.4.0
 
+# Stage 2 dependencies
+replicate==0.34.1
+tenacity==9.0.0
+
 # Testing dependencies
 pytest==8.3.4
 pytest-cov==6.0.0

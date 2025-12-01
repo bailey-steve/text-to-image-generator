@@ -17,7 +17,7 @@ class TestGenerationRequest:
         assert request.prompt == "A cat"
         assert request.negative_prompt is None
         assert request.guidance_scale == 7.5  # default
-        assert request.num_inference_steps == 50  # default
+        assert request.num_inference_steps == 4  # default
         assert request.seed is None
         assert request.width == 512  # default
         assert request.height == 512  # default
