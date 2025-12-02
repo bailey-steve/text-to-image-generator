@@ -3,7 +3,7 @@
 import logging
 from datetime import datetime
 from typing import Optional
-from huggingface_hub import InferenceClient
+from huggingface_hub import InferenceClient, model_info
 from huggingface_hub.utils import HfHubHTTPError
 
 from src.core.base_backend import BaseBackend
@@ -122,10 +122,9 @@ class HuggingFaceBackend(BaseBackend):
             True if the backend is healthy, False otherwise
         """
         try:
-            # Try to list available models as a health check
-            # This is a lightweight API call
+            # Try to get model info as a lightweight health check
             logger.debug("Performing health check...")
-            self.client.get_model_status(self.model)
+            model_info(self.model, token=self.api_key)
             logger.debug("Health check passed")
             return True
         except Exception as e:

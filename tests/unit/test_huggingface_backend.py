@@ -160,25 +160,25 @@ class TestHuggingFaceBackend:
         with pytest.raises(RuntimeError, match="Failed to generate image"):
             backend.generate_image(request)
 
+    @patch('src.backends.huggingface.model_info')
     @patch('src.backends.huggingface.InferenceClient')
-    def test_health_check_success(self, mock_client_class):
+    def test_health_check_success(self, mock_client_class, mock_model_info):
         """Test successful health check."""
-        mock_client = Mock()
-        mock_client.get_model_status.return_value = {"status": "ok"}
-        mock_client_class.return_value = mock_client
+        mock_client_class.return_value = Mock()
+        mock_model_info.return_value = {"modelId": "test-model"}
 
         backend = HuggingFaceBackend(api_key="test_token")
         result = backend.health_check()
 
         assert result is True
-        mock_client.get_model_status.assert_called_once_with(backend.model)
+        mock_model_info.assert_called_once_with(backend.model, token=backend.api_key)
 
+    @patch('src.backends.huggingface.model_info')
     @patch('src.backends.huggingface.InferenceClient')
-    def test_health_check_failure(self, mock_client_class):
+    def test_health_check_failure(self, mock_client_class, mock_model_info):
         """Test failed health check."""
-        mock_client = Mock()
-        mock_client.get_model_status.side_effect = Exception("Connection error")
-        mock_client_class.return_value = mock_client
+        mock_client_class.return_value = Mock()
+        mock_model_info.side_effect = Exception("Connection error")
 
         backend = HuggingFaceBackend(api_key="test_token")
         result = backend.health_check()
