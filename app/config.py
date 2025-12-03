@@ -39,6 +39,10 @@ class Settings(BaseSettings):
     max_retries: int = 3
     timeout: int = 60
 
+    # Local Backend Settings (Stage 4)
+    local_model_cache_dir: Optional[str] = None  # Defaults to ~/.cache/huggingface
+    local_model: str = "stabilityai/sd-turbo"     # Default local model
+
     # Testing
     run_integration_tests: bool = False
 
@@ -48,6 +52,10 @@ class Settings(BaseSettings):
         Raises:
             ValueError: If required API keys are missing
         """
+        # Local backend doesn't require API keys
+        if self.default_backend == "local":
+            return
+
         if not self.huggingface_token and self.default_backend == "huggingface":
             raise ValueError(
                 "HUGGINGFACE_TOKEN is required when using the HuggingFace backend. "
@@ -62,7 +70,7 @@ class Settings(BaseSettings):
                 "Get your token from: https://replicate.com/account/api-tokens"
             )
 
-        # Validate fallback backend has token
+        # Validate fallback backend has token (local doesn't need token)
         if self.enable_fallback and self.fallback_backend:
             if self.fallback_backend == "replicate" and not self.replicate_token:
                 raise ValueError(

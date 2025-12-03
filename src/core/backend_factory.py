@@ -6,6 +6,7 @@ from typing import Optional
 from src.core.base_backend import BaseBackend
 from src.backends.huggingface import HuggingFaceBackend
 from src.backends.replicate import ReplicateBackend
+from src.backends.local import LocalBackend
 
 logger = logging.getLogger(__name__)
 
@@ -20,20 +21,21 @@ class BackendFactory:
     SUPPORTED_BACKENDS = {
         "huggingface": HuggingFaceBackend,
         "replicate": ReplicateBackend,
+        "local": LocalBackend,
     }
 
     @classmethod
     def create_backend(
         cls,
         backend_type: str,
-        api_key: str,
+        api_key: Optional[str] = None,
         model: Optional[str] = None
     ) -> BaseBackend:
         """Create a backend instance.
 
         Args:
-            backend_type: The type of backend ("huggingface" or "replicate")
-            api_key: API key for the backend service
+            backend_type: The type of backend ("huggingface", "replicate", or "local")
+            api_key: API key for cloud backend services (not required for "local")
             model: Optional model identifier
 
         Returns:
@@ -41,7 +43,7 @@ class BackendFactory:
 
         Raises:
             ValueError: If backend_type is not supported
-            ValueError: If API key is missing
+            ValueError: If API key is missing for cloud backends
         """
         backend_type_lower = backend_type.lower()
 
@@ -52,17 +54,26 @@ class BackendFactory:
                 f"Supported backends: {supported}"
             )
 
-        if not api_key:
+        # Local backend doesn't require API key
+        if backend_type_lower != "local" and not api_key:
             raise ValueError(f"API key is required for {backend_type} backend")
 
         backend_class = cls.SUPPORTED_BACKENDS[backend_type_lower]
 
         logger.info(f"Creating {backend_type} backend")
 
-        if model:
-            return backend_class(api_key=api_key, model=model)
+        # Local backend has different initialization
+        if backend_type_lower == "local":
+            if model:
+                return backend_class(model=model)
+            else:
+                return backend_class()
         else:
-            return backend_class(api_key=api_key)
+            # Cloud backends require API key
+            if model:
+                return backend_class(api_key=api_key, model=model)
+            else:
+                return backend_class(api_key=api_key)
 
     @classmethod
     def get_supported_backends(cls) -> list[str]:

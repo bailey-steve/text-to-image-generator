@@ -6,8 +6,15 @@ A Python-based text-to-image generation application with a web interface, built 
 
 - 🎨 Generate images from text prompts using AI
 - 🌐 Web-based user interface (Gradio)
+- ☁️ Multiple backends: HuggingFace, Replicate, Local (offline)
+- 💾 Image download with metadata embedding (PNG/JPEG/WebP)
+- 📸 Image gallery and history management (up to 50 images)
+- 🎲 Batch generation (2-9 variations with different seeds)
 - ⚙️ Adjustable generation parameters (guidance scale, steps, image size)
+- 📐 Aspect ratio presets (Square, Portrait, Landscape, Widescreen)
 - 🔄 Support for negative prompts
+- 🔁 Automatic fallback between backends
+- 🏠 Local CPU-optimized models for offline use (SD-Turbo, SDXL-Turbo)
 - 📊 Extensible architecture for multiple backends
 
 ## Prerequisites
@@ -99,6 +106,39 @@ The application will start on http://localhost:7860
 - "A cute cat wearing a wizard hat, digital art"
 - "An astronaut riding a horse on Mars, photorealistic"
 
+### Using Local Backend (Offline Mode)
+
+The local backend allows you to generate images offline using CPU-optimized models:
+
+**Setup:**
+
+```bash
+# Install Stage 4 dependencies (torch, diffusers, etc.)
+pip install -r requirements.txt
+
+# Configure for local mode (optional - can also select in UI)
+# Edit .env file:
+DEFAULT_BACKEND=local
+LOCAL_MODEL=stabilityai/sd-turbo  # or stabilityai/sdxl-turbo
+```
+
+**Features:**
+- **No API keys required** - Works completely offline
+- **First-time setup**: Model downloads automatically (~1-2GB) and caches locally
+- **Faster subsequent runs**: Models load from cache (~5-10 seconds)
+- **CPU-optimized**: Uses SD-Turbo (512x512) or SDXL-Turbo (1024x1024)
+- **1-4 inference steps**: Very fast generation compared to standard models
+
+**Usage in UI:**
+1. Select "local" from the Backend Selection dropdown
+2. Generate images as normal - no internet required!
+3. First generation will download the model (one-time only)
+
+**Performance Notes:**
+- First generation: 1-2 minutes (includes model download)
+- Subsequent generations: 10-30 seconds on CPU
+- GPU support: Automatic if CUDA is available
+
 ## Testing
 
 ### Run all tests
@@ -161,17 +201,33 @@ The application follows a modular architecture:
 
 ## Roadmap
 
-This is **Stage 1** of a 6-stage development plan:
+This is a 6-stage development plan:
 
-### ✅ Stage 1: Foundation (Current)
+### ✅ Completed Stages
+
+**Stage 1: Foundation**
 - Basic text-to-image with HuggingFace backend
 - Gradio web interface
 - Core architecture and tests
 
+**Stage 2: Multi-Backend Support**
+- Replicate backend integration
+- Automatic fallback logic
+- Backend health monitoring
+
+**Stage 3: Advanced Features**
+- Image download with metadata (PNG/JPEG/WebP)
+- Image gallery and history management
+- Batch generation (2-9 variations)
+- Aspect ratio presets
+
+**Stage 4: Local CPU-Optimized Models** (Current)
+- Offline image generation using Diffusers
+- CPU-optimized models (SD-Turbo, SDXL-Turbo)
+- Model caching for faster loading
+- No API keys required for local mode
+
 ### 🔄 Future Stages
-- **Stage 2**: Multi-backend support (Replicate, fallback logic)
-- **Stage 3**: Advanced parameters, image history, presets
-- **Stage 4**: Local CPU-optimized models for offline use
 - **Stage 5**: Plugin system for extensibility
 - **Stage 6**: Production features (Docker, monitoring, rate limiting)
 

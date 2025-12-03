@@ -11,6 +11,12 @@ pillow==10.4.0
 replicate==0.34.1
 tenacity==9.0.0
 
+# Stage 4 dependencies (Local CPU-optimized models)
+torch>=2.0.0
+diffusers>=0.30.0
+transformers>=4.35.0
+accelerate>=0.20.0
+
 # Testing dependencies
 pytest==8.3.4
 pytest-cov==6.0.0

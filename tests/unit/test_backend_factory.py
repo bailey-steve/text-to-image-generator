@@ -6,6 +6,7 @@ from unittest.mock import Mock, patch
 from src.core.backend_factory import BackendFactory
 from src.backends.huggingface import HuggingFaceBackend
 from src.backends.replicate import ReplicateBackend
+from src.backends.local import LocalBackend
 
 
 class TestBackendFactory:
@@ -18,6 +19,7 @@ class TestBackendFactory:
         assert isinstance(backends, list)
         assert "huggingface" in backends
         assert "replicate" in backends
+        assert "local" in backends
 
     def test_is_supported_huggingface(self):
         """Test checking if huggingface is supported."""
@@ -88,3 +90,38 @@ class TestBackendFactory:
 
             result4 = BackendFactory.create_backend("Replicate", "token")
             assert isinstance(result4, ReplicateBackend)
+
+    def test_is_supported_local(self):
+        """Test checking if local is supported."""
+        assert BackendFactory.is_supported("local")
+        assert BackendFactory.is_supported("Local")
+        assert BackendFactory.is_supported("LOCAL")
+
+    def test_create_local_backend(self):
+        """Test creating Local backend."""
+        result = BackendFactory.create_backend("local")
+
+        assert isinstance(result, LocalBackend)
+        assert result.name == "Local"
+        assert result.model == "stabilityai/sd-turbo"
+
+    def test_create_local_backend_with_model(self):
+        """Test creating Local backend with custom model."""
+        result = BackendFactory.create_backend("local", model="stabilityai/sdxl-turbo")
+
+        assert isinstance(result, LocalBackend)
+        assert result.model == "stabilityai/sdxl-turbo"
+
+    def test_create_local_backend_no_api_key_required(self):
+        """Test that local backend doesn't require API key."""
+        # Should not raise error
+        result = BackendFactory.create_backend("local", api_key=None)
+        assert isinstance(result, LocalBackend)
+
+    def test_create_cloud_backend_requires_api_key(self):
+        """Test that cloud backends still require API keys."""
+        with pytest.raises(ValueError, match="API key is required"):
+            BackendFactory.create_backend("huggingface", api_key=None)
+
+        with pytest.raises(ValueError, match="API key is required"):
+            BackendFactory.create_backend("replicate", api_key=None)

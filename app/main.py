@@ -54,6 +54,11 @@ def create_generator() -> ImageGenerator:
                 "replicate",
                 settings.replicate_token or ""
             )
+        elif settings.default_backend == "local":
+            primary = BackendFactory.create_backend(
+                "local",
+                model=settings.local_model
+            )
         else:
             primary = BackendFactory.create_backend(
                 "huggingface",
@@ -76,6 +81,13 @@ def create_generator() -> ImageGenerator:
                         BackendFactory.create_backend(
                             "huggingface",
                             settings.huggingface_token
+                        )
+                    )
+                elif settings.fallback_backend == "local":
+                    fallbacks.append(
+                        BackendFactory.create_backend(
+                            "local",
+                            model=settings.local_model
                         )
                     )
             except Exception as e:
@@ -181,6 +193,10 @@ def generate_batch_images(
                         temp_backend = BackendFactory.create_backend("replicate", settings.replicate_token)
                         generator.primary_backend = temp_backend
                         use_fallback = False
+                    elif backend_choice == "local":
+                        temp_backend = BackendFactory.create_backend("local", model=settings.local_model)
+                        generator.primary_backend = temp_backend
+                        use_fallback = False
 
                     result = generator.generate_image(request, use_fallback=use_fallback)
                 finally:
@@ -277,6 +293,13 @@ def generate_image(
                     temp_backend = BackendFactory.create_backend(
                         "replicate",
                         settings.replicate_token
+                    )
+                    generator.primary_backend = temp_backend
+                    use_fallback = False
+                elif backend_choice == "local":
+                    temp_backend = BackendFactory.create_backend(
+                        "local",
+                        model=settings.local_model
                     )
                     generator.primary_backend = temp_backend
                     use_fallback = False
@@ -507,10 +530,10 @@ def create_ui():
                     with gr.Column(scale=1):
                         # Backend selection
                         backend_selector = gr.Radio(
-                            choices=["auto", "huggingface", "replicate"],
+                            choices=["auto", "huggingface", "replicate", "local"],
                             value="auto",
                             label="Backend Selection",
-                            info="Auto uses primary with fallback, or choose specific backend"
+                            info="Auto uses primary with fallback. Local = offline CPU inference"
                         )
 
                         # Input controls
@@ -670,10 +693,10 @@ def create_ui():
                         )
 
                         batch_backend_selector = gr.Radio(
-                            choices=["auto", "huggingface", "replicate"],
+                            choices=["auto", "huggingface", "replicate", "local"],
                             value="auto",
                             label="Backend Selection",
-                            info="Auto uses primary with fallback"
+                            info="Auto uses primary with fallback. Local = offline CPU inference"
                         )
 
                         batch_size_slider = gr.Slider(
