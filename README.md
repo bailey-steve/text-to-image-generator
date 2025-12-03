@@ -18,6 +18,10 @@ A Python-based text-to-image generation application with a web interface, built 
 - 📊 Extensible architecture for multiple backends
 - 🔌 Plugin system for custom backend development
 - 🛠️ Example dummy backend plugin included
+- 🐳 Docker and Docker Compose support
+- 💪 Production-ready with health checks and monitoring
+- 🛡️ Rate limiting for API protection
+- 📈 System metrics and performance monitoring
 
 ## Prerequisites
 
@@ -294,6 +298,104 @@ The plugin system automatically:
 
 For more details, see `plugins/README.md` and the example plugin in `plugins/dummy_backend/`.
 
+## Production Deployment (Stage 6)
+
+The application is production-ready with Docker support, monitoring, and rate limiting.
+
+### Quick Deploy with Docker
+
+```bash
+# 1. Create .env file
+cp .env.example .env
+# Edit .env and add your API tokens
+
+# 2. Start with Docker Compose
+docker-compose up -d
+
+# 3. Access the application
+open http://localhost:7860
+```
+
+### Features
+
+**Docker Containerization:**
+- Multi-stage Docker build for optimized images
+- Non-root user for security
+- Health checks built-in
+- Automatic restart on failure
+
+**Monitoring:**
+- `/health` endpoint for load balancers
+- System metrics (CPU, memory, disk usage)
+- Request/error tracking
+- Uptime monitoring
+
+**Rate Limiting:**
+- Configurable request limits per client
+- Sliding window algorithm
+- Automatic client tracking
+- Protection against abuse
+
+**Production Configuration:**
+```bash
+# In .env
+PRODUCTION_MODE=true
+ENABLE_RATE_LIMITING=true
+RATE_LIMIT_REQUESTS=100  # requests per window
+RATE_LIMIT_WINDOW=60     # seconds
+ENABLE_HEALTH_CHECKS=true
+ENABLE_METRICS=true
+```
+
+### Deployment Options
+
+**Docker Compose (Recommended):**
+```bash
+docker-compose up -d
+```
+
+**Standalone Docker:**
+```bash
+docker build -t text-to-image-generator .
+docker run -d -p 7860:7860 --env-file .env text-to-image-generator
+```
+
+**Kubernetes:**
+See `DEPLOYMENT.md` for Kubernetes manifests and configuration.
+
+### Monitoring & Health Checks
+
+Check application health:
+```bash
+curl http://localhost:7860/health
+```
+
+Response:
+```json
+{
+  "status": "healthy",
+  "message": "All systems operational",
+  "details": {
+    "uptime_seconds": 3600,
+    "cpu_usage_percent": 15.2,
+    "memory_usage_percent": 45.3,
+    "request_count": 150,
+    "error_rate": 0.0133
+  }
+}
+```
+
+### Complete Deployment Guide
+
+For comprehensive deployment instructions including:
+- Security best practices
+- Scaling strategies
+- Load balancer configuration
+- Troubleshooting
+- Production checklist
+
+See **[DEPLOYMENT.md](DEPLOYMENT.md)**
+
 ## Testing
 
 ### Run all tests
@@ -382,15 +484,23 @@ This is a 6-stage development plan:
 - Model caching for faster loading
 - No API keys required for local mode
 
-**Stage 5: Plugin System** (Current)
+**Stage 5: Plugin System**
 - Extensible plugin architecture for custom backends
 - Plugin discovery and management system
 - Built-in plugin wrappers for existing backends
 - Example dummy backend plugin for testing
 - Comprehensive plugin development documentation
 
-### 🔄 Future Stages
-- **Stage 6**: Production features (Docker, monitoring, rate limiting)
+**Stage 6: Production Features** (Current)
+- Docker containerization with multi-stage builds
+- Docker Compose for easy deployment
+- Health check endpoints and monitoring
+- Rate limiting for API protection
+- System metrics collection (CPU, memory, disk)
+- Production configuration management
+- Comprehensive deployment documentation
+
+### 🎉 All Development Stages Complete!
 
 ## Troubleshooting
 

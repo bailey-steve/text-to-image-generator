@@ -17,6 +17,9 @@ diffusers>=0.30.0
 transformers>=4.35.0
 accelerate>=0.20.0
 
+# Stage 6 dependencies (Production features)
+psutil==6.1.0
+
 # Testing dependencies
 pytest==8.3.4
 pytest-cov==6.0.0

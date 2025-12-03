@@ -43,6 +43,14 @@ class Settings(BaseSettings):
     local_model_cache_dir: Optional[str] = None  # Defaults to ~/.cache/huggingface
     local_model: str = "stabilityai/sd-turbo"     # Default local model
 
+    # Production Settings (Stage 6)
+    enable_rate_limiting: bool = True
+    rate_limit_requests: int = 100  # Max requests per window
+    rate_limit_window: int = 60  # Window size in seconds
+    enable_health_checks: bool = True
+    enable_metrics: bool = True
+    production_mode: bool = False  # Enables strict production behaviors
+
     # Testing
     run_integration_tests: bool = False
 
