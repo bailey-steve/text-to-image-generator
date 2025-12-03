@@ -13,7 +13,7 @@ sys.modules['transformers'] = MagicMock()
 sys.modules['accelerate'] = MagicMock()
 
 from src.backends.local import LocalBackend
-from src.core.models import GenerationRequest
+from src.core.models import GenerationRequest, GeneratedImage
 
 
 class TestLocalBackend:
@@ -134,8 +134,10 @@ class TestLocalBackend:
         result = backend.generate_image(request)
 
         # Verify result
-        assert isinstance(result, bytes)
-        assert len(result) > 0
+        assert isinstance(result, GeneratedImage)
+        assert len(result.image_data) > 0
+        assert result.prompt == "A test image"
+        assert result.backend == "Local"
 
         # Verify pipeline was called with correct parameters
         mock_pipeline.assert_called_once()

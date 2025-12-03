@@ -16,6 +16,8 @@ A Python-based text-to-image generation application with a web interface, built 
 - 🔁 Automatic fallback between backends
 - 🏠 Local CPU-optimized models for offline use (SD-Turbo, SDXL-Turbo)
 - 📊 Extensible architecture for multiple backends
+- 🔌 Plugin system for custom backend development
+- 🛠️ Example dummy backend plugin included
 
 ## Prerequisites
 
@@ -139,6 +141,159 @@ LOCAL_MODEL=stabilityai/sd-turbo  # or stabilityai/sdxl-turbo
 - Subsequent generations: 10-30 seconds on CPU
 - GPU support: Automatic if CUDA is available
 
+## Plugin System (Stage 5)
+
+The application features an extensible plugin system that allows you to add custom image generation backends without modifying the core code.
+
+### What are Plugins?
+
+Plugins are Python packages that extend the application's functionality. Currently, the plugin system supports **backend plugins** that provide new image generation sources (APIs, models, services).
+
+### Built-in Backends as Plugins
+
+All existing backends are now plugin-based:
+- **huggingface**: HuggingFace Inference API (requires API key)
+- **replicate**: Replicate API (requires API key)
+- **local**: Local Diffusers models (no API key needed)
+
+### Creating a Custom Backend Plugin
+
+**1. Create Plugin Directory**
+
+```bash
+mkdir -p plugins/my_backend
+```
+
+**2. Create Package Files**
+
+```bash
+# plugins/my_backend/__init__.py
+"""My custom backend plugin."""
+__version__ = "1.0.0"
+```
+
+**3. Implement Your Backend** (`plugins/my_backend/backend.py`)
+
+```python
+from src.core.base_backend import BaseBackend
+from src.core.models import GenerationRequest, GeneratedImage
+from datetime import datetime
+import io
+
+class MyBackend(BaseBackend):
+    """Your custom backend implementation."""
+
+    @property
+    def name(self) -> str:
+        return "MyBackend"
+
+    @property
+    def supported_models(self) -> list[str]:
+        return ["my-model-v1"]
+
+    def generate_image(self, request: GenerationRequest) -> GeneratedImage:
+        # Your image generation logic here
+        # ...
+
+        return GeneratedImage(
+            image_data=image_bytes,
+            prompt=request.prompt,
+            backend=self.name,
+            timestamp=datetime.now(),
+            metadata={"model": "my-model-v1"}
+        )
+
+    def health_check(self) -> bool:
+        return True
+```
+
+**4. Create Plugin Definition** (`plugins/my_backend/__plugin__.py`)
+
+```python
+from src.core.plugin import BackendPlugin, PluginMetadata, PluginType
+from src.core.base_backend import BaseBackend
+from typing import Type
+
+class Plugin(BackendPlugin):
+    """Plugin definition for My Backend."""
+
+    def _get_metadata(self) -> PluginMetadata:
+        return PluginMetadata(
+            name="my_backend",  # Lowercase, no spaces
+            display_name="My Backend",
+            version="1.0.0",
+            author="Your Name",
+            description="Custom backend for special image generation",
+            plugin_type=PluginType.BACKEND,
+            dependencies=["requests"],  # Required Python packages
+            requires_api_key=True  # Set to False if no API key needed
+        )
+
+    def initialize(self) -> bool:
+        # Initialize your plugin (optional)
+        return True
+
+    def cleanup(self) -> None:
+        # Clean up resources (optional)
+        pass
+
+    def get_backend_class(self) -> Type[BaseBackend]:
+        from plugins.my_backend.backend import MyBackend
+        return MyBackend
+```
+
+**5. Use Your Plugin**
+
+Your plugin is automatically discovered on startup:
+
+```python
+from src.core.backend_factory import BackendFactory
+
+# Create backend from your plugin
+backend = BackendFactory.create_backend("my_backend", api_key="...")
+
+# Or use it in the UI - it will appear in the backend dropdown
+```
+
+### Example Plugin
+
+The repository includes a **dummy_backend** plugin in `plugins/dummy_backend/` that generates simple colored rectangles. This is useful for:
+- Understanding the plugin structure
+- Testing without API keys or heavy models
+- Fast development and debugging
+
+To use the dummy backend:
+```python
+backend = BackendFactory.create_backend("dummy_backend")
+```
+
+### Plugin Requirements
+
+- Plugin name must be **lowercase with no spaces** (e.g., `my_backend`)
+- Must have `__plugin__.py` with a `Plugin` class
+- Plugin class must inherit from `BackendPlugin`
+- Backend class must inherit from `BaseBackend`
+- All dependencies must be installed before the plugin loads
+
+### Plugin Discovery
+
+The plugin system automatically:
+1. Scans the `plugins/` directory on startup
+2. Looks for directories containing `__plugin__.py`
+3. Validates the plugin structure and dependencies
+4. Registers discovered plugins with the PluginManager
+5. Makes plugins available through BackendFactory
+
+### Plugin Development Tips
+
+- **Start Simple**: Copy the dummy_backend plugin and modify it
+- **Test Locally**: Ensure all dependencies are installed
+- **Error Handling**: Add proper error handling in your backend
+- **Metadata**: Provide clear descriptions and accurate dependency lists
+- **Documentation**: Add a README in your plugin directory
+
+For more details, see `plugins/README.md` and the example plugin in `plugins/dummy_backend/`.
+
 ## Testing
 
 ### Run all tests
@@ -221,14 +376,20 @@ This is a 6-stage development plan:
 - Batch generation (2-9 variations)
 - Aspect ratio presets
 
-**Stage 4: Local CPU-Optimized Models** (Current)
+**Stage 4: Local CPU-Optimized Models**
 - Offline image generation using Diffusers
 - CPU-optimized models (SD-Turbo, SDXL-Turbo)
 - Model caching for faster loading
 - No API keys required for local mode
 
+**Stage 5: Plugin System** (Current)
+- Extensible plugin architecture for custom backends
+- Plugin discovery and management system
+- Built-in plugin wrappers for existing backends
+- Example dummy backend plugin for testing
+- Comprehensive plugin development documentation
+
 ### 🔄 Future Stages
-- **Stage 5**: Plugin system for extensibility
 - **Stage 6**: Production features (Docker, monitoring, rate limiting)
 
 ## Troubleshooting

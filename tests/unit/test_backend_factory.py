@@ -4,6 +4,7 @@ import pytest
 from unittest.mock import Mock, patch
 
 from src.core.backend_factory import BackendFactory
+from src.core.plugin_manager import PluginManager
 from src.backends.huggingface import HuggingFaceBackend
 from src.backends.replicate import ReplicateBackend
 from src.backends.local import LocalBackend
@@ -11,6 +12,18 @@ from src.backends.local import LocalBackend
 
 class TestBackendFactory:
     """Tests for BackendFactory."""
+
+    def setup_method(self):
+        """Set up test fixtures."""
+        # Reset plugin manager and factory before each test
+        PluginManager.reset_instance()
+        BackendFactory._plugin_manager = None
+
+    def teardown_method(self):
+        """Clean up test fixtures."""
+        # Reset plugin manager and factory after each test
+        PluginManager.reset_instance()
+        BackendFactory._plugin_manager = None
 
     def test_get_supported_backends(self):
         """Test getting list of supported backends."""

@@ -84,3 +84,8 @@ models/
 .tmp/
 tmp/
 *.tmp
+
+# Plugins (keep example plugin, ignore custom plugins)
+plugins/*
+!plugins/README.md
+!plugins/dummy_backend/
