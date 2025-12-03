@@ -22,6 +22,9 @@ A Python-based text-to-image generation application with a web interface, built 
 - 💪 Production-ready with health checks and monitoring
 - 🛡️ Rate limiting for API protection
 - 📈 System metrics and performance monitoring
+- ✨ Prompt enhancement with templates and style presets
+- 💬 Intelligent prompt suggestions and improvements
+- 🎯 Negative prompt generation
 
 ## Prerequisites
 
@@ -297,6 +300,135 @@ The plugin system automatically:
 - **Documentation**: Add a README in your plugin directory
 
 For more details, see `plugins/README.md` and the example plugin in `plugins/dummy_backend/`.
+
+## Prompt Enhancement
+
+The application includes a powerful prompt enhancement system to help you create better images.
+
+### Features
+
+**🎨 Style Presets:**
+- Photorealistic
+- Digital Art
+- Anime/Manga
+- Oil Painting
+- Watercolor
+- Cyberpunk
+- Fantasy
+- And more!
+
+**⭐ Quality Levels:**
+- Standard
+- High Quality
+- Masterpiece
+- Professional
+
+**📝 Template Library:**
+- Portrait templates
+- Landscape templates
+- Character design
+- Architecture
+- Product photography
+- Food photography
+- Abstract art
+- And more!
+
+### Using Prompt Enhancement
+
+**Python API:**
+```python
+from src.utils.prompt_enhancer import PromptEnhancer, PromptStyle, PromptQuality
+
+enhancer = PromptEnhancer()
+
+# Basic enhancement
+enhanced = enhancer.enhance_prompt("a cat sitting")
+# Result: "a cat sitting, detailed, sharp focus"
+
+# With style and quality
+enhanced = enhancer.enhance_prompt(
+    "a mountain landscape",
+    style=PromptStyle.PHOTOREALISTIC,
+    quality=PromptQuality.MASTERPIECE
+)
+# Result: "a mountain landscape, photorealistic, highly detailed, 8k uhd,
+#          dslr, soft lighting, high quality, masterpiece, best quality,
+#          highly detailed, award-winning"
+
+# Generate negative prompts
+negative = enhancer.generate_negative_prompt()
+# Result: "blurry, low quality, distorted, deformed, bad anatomy, ..."
+
+# Get suggestions for improvement
+suggestions = enhancer.suggest_improvements("cat")
+# Returns: issues, recommendations, and enhanced examples
+```
+
+**Using Templates:**
+```python
+from src.utils.prompt_enhancer import PromptLibrary
+
+# Get a template
+template = PromptLibrary.get_template("portrait")
+
+# Format with your values
+prompt = template.format(
+    subject="a wise wizard",
+    style="oil painting",
+    quality="masterpiece",
+    lighting="dramatic lighting"
+)
+# Result: "portrait of a wise wizard, oil painting, masterpiece,
+#          detailed face, dramatic lighting"
+
+# Search for templates
+templates = PromptLibrary.search_templates("nature")
+# Returns all templates related to nature
+
+# Browse by category
+landscape_templates = PromptLibrary.get_templates_by_category("nature")
+```
+
+### Available Templates
+
+| Template | Category | Description |
+|----------|----------|-------------|
+| portrait | people | High-quality portrait generation |
+| landscape | nature | Beautiful landscape scenes |
+| character | fantasy | Character design and concept art |
+| architecture | buildings | Architectural visualization |
+| product | commercial | Product photography style |
+| animal | nature | Animal and wildlife images |
+| abstract | artistic | Abstract compositions |
+| food | commercial | Food photography |
+
+### Style Examples
+
+**Photorealistic:**
+```
+"a beautiful sunset over mountains, photorealistic, highly detailed,
+8k uhd, dslr, soft lighting, high quality"
+```
+
+**Digital Art:**
+```
+"a futuristic city, digital art, concept art, trending on artstation,
+highly detailed"
+```
+
+**Anime:**
+```
+"a magical girl character, anime style, manga illustration, vibrant colors,
+clean linework"
+```
+
+### Tips for Better Prompts
+
+1. **Be Specific:** Instead of "a cat", try "a fluffy orange tabby cat"
+2. **Add Details:** Include lighting, mood, composition details
+3. **Use Quality Modifiers:** "high quality", "detailed", "masterpiece"
+4. **Specify Style:** Photorealistic, digital art, oil painting, etc.
+5. **Use Negative Prompts:** Specify what you don't want in the image
 
 ## Production Deployment (Stage 6)
 
