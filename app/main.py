@@ -12,6 +12,12 @@ from src.core.backend_factory import BackendFactory
 from src.core.image_generator import ImageGenerator
 from src.utils.image_utils import create_downloadable_image, ImageFormat
 from src.utils.history_manager import ImageHistoryManager
+from src.utils.prompt_enhancer import (
+    get_prompt_enhancer,
+    PromptStyle,
+    PromptQuality,
+    PromptLibrary
+)
 
 # Configure logging
 logging.basicConfig(
@@ -29,6 +35,9 @@ last_generated_image: Optional[GeneratedImage] = None
 
 # Global history manager
 history_manager = ImageHistoryManager(max_history=50)
+
+# Global prompt enhancer
+prompt_enhancer = get_prompt_enhancer()
 
 
 def create_generator() -> ImageGenerator:
@@ -474,6 +483,157 @@ def download_image(format_choice: str) -> Optional[str]:
         return None
 
 
+def enhance_prompt_with_settings(
+    prompt: str,
+    style_choice: str,
+    quality_choice: str,
+    add_details: bool
+) -> str:
+    """Enhance a prompt with selected style and quality.
+
+    Args:
+        prompt: Original prompt text
+        style_choice: Selected style name
+        quality_choice: Selected quality name
+        add_details: Whether to add detail enhancers
+
+    Returns:
+        Enhanced prompt string
+    """
+    if not prompt or prompt.strip() == "":
+        return prompt
+
+    # Map UI choices to enums
+    style_map = {
+        "None": None,
+        "Photorealistic": PromptStyle.PHOTOREALISTIC,
+        "Artistic": PromptStyle.ARTISTIC,
+        "Anime": PromptStyle.ANIME,
+        "Digital Art": PromptStyle.DIGITAL_ART,
+        "Oil Painting": PromptStyle.OIL_PAINTING,
+        "Watercolor": PromptStyle.WATERCOLOR,
+        "Sketch": PromptStyle.SKETCH,
+        "Cyberpunk": PromptStyle.CYBERPUNK,
+        "Fantasy": PromptStyle.FANTASY,
+        "Minimalist": PromptStyle.MINIMALIST,
+    }
+
+    quality_map = {
+        "None": None,
+        "Standard": PromptQuality.STANDARD,
+        "High Quality": PromptQuality.HIGH_QUALITY,
+        "Masterpiece": PromptQuality.MASTERPIECE,
+        "Professional": PromptQuality.PROFESSIONAL,
+    }
+
+    style = style_map.get(style_choice)
+    quality = quality_map.get(quality_choice)
+
+    enhanced = prompt_enhancer.enhance_prompt(
+        prompt,
+        style=style,
+        quality=quality,
+        add_details=add_details
+    )
+
+    return enhanced
+
+
+def apply_template(
+    template_choice: str,
+    **template_params
+) -> str:
+    """Apply a prompt template with given parameters.
+
+    Args:
+        template_choice: Selected template name
+        **template_params: Template parameters
+
+    Returns:
+        Formatted prompt from template
+    """
+    if template_choice == "None":
+        return ""
+
+    template = PromptLibrary.get_template(template_choice.lower())
+    if template is None:
+        return ""
+
+    try:
+        # Filter out empty parameters
+        params = {k: v for k, v in template_params.items() if v}
+        return template.format(**params)
+    except KeyError as e:
+        return f"Error: Missing template parameter {e}"
+
+
+def get_template_parameters(template_choice: str) -> dict:
+    """Get required parameters for a template.
+
+    Args:
+        template_choice: Selected template name
+
+    Returns:
+        Dictionary with parameter info
+    """
+    if template_choice == "None":
+        return {}
+
+    template = PromptLibrary.get_template(template_choice.lower())
+    if template is None:
+        return {}
+
+    # Extract parameters from template string
+    import re
+    params = re.findall(r'\{(\w+)\}', template.template)
+    return {param: "" for param in params}
+
+
+def generate_negative_prompt_from_defaults() -> str:
+    """Generate negative prompt from default terms.
+
+    Returns:
+        Comma-separated negative prompt string
+    """
+    return prompt_enhancer.generate_negative_prompt()
+
+
+def get_prompt_suggestions(prompt: str) -> str:
+    """Get improvement suggestions for a prompt.
+
+    Args:
+        prompt: Prompt to analyze
+
+    Returns:
+        Formatted suggestions text
+    """
+    if not prompt or prompt.strip() == "":
+        return "Enter a prompt to get suggestions"
+
+    suggestions = prompt_enhancer.suggest_improvements(prompt)
+
+    output = "## Analysis\n\n"
+
+    if suggestions["issues"]:
+        output += "**Issues Found:**\n"
+        for issue in suggestions["issues"]:
+            output += f"- {issue}\n"
+        output += "\n"
+
+    if suggestions["recommendations"]:
+        output += "**Recommendations:**\n"
+        for rec in suggestions["recommendations"]:
+            output += f"- {rec}\n"
+        output += "\n"
+
+    if suggestions["enhanced_examples"]:
+        output += "**Enhanced Examples:**\n\n"
+        for i, example in enumerate(suggestions["enhanced_examples"], 1):
+            output += f"{i}. `{example}`\n\n"
+
+    return output
+
+
 # Initialize generator
 try:
     generator = create_generator()
@@ -550,6 +710,60 @@ def create_ui():
                             lines=2,
                             value="blurry, low quality, distorted"
                         )
+
+                        with gr.Accordion("✨ Prompt Enhancement", open=True):
+                            gr.Markdown("Enhance your prompts with styles, quality presets, and templates")
+
+                            # Style and Quality selectors
+                            with gr.Row():
+                                style_selector = gr.Dropdown(
+                                    choices=["None", "Photorealistic", "Artistic", "Anime", "Digital Art",
+                                            "Oil Painting", "Watercolor", "Sketch", "Cyberpunk", "Fantasy", "Minimalist"],
+                                    value="None",
+                                    label="Style Preset",
+                                    info="Add style modifiers to your prompt"
+                                )
+
+                                quality_selector = gr.Dropdown(
+                                    choices=["None", "Standard", "High Quality", "Masterpiece", "Professional"],
+                                    value="None",
+                                    label="Quality Level",
+                                    info="Add quality enhancers"
+                                )
+
+                            add_details_checkbox = gr.Checkbox(
+                                label="Add detail enhancers (sharp focus, detailed, intricate)",
+                                value=True
+                            )
+
+                            with gr.Row():
+                                enhance_button = gr.Button("✨ Enhance Prompt", variant="secondary", size="sm")
+                                negative_defaults_button = gr.Button("🚫 Add Negative Defaults", variant="secondary", size="sm")
+                                suggestions_button = gr.Button("💡 Get Suggestions", variant="secondary", size="sm")
+
+                            # Template section
+                            with gr.Accordion("📋 Use Template", open=False):
+                                template_selector = gr.Dropdown(
+                                    choices=["None", "Portrait", "Landscape", "Character", "Architecture",
+                                            "Product", "Animal", "Abstract", "Food"],
+                                    value="None",
+                                    label="Template",
+                                    info="Start with a pre-built template"
+                                )
+
+                                template_info = gr.Markdown("Select a template to see required parameters")
+
+                                # Dynamic template parameter inputs
+                                template_param1 = gr.Textbox(label="Parameter 1", visible=False)
+                                template_param2 = gr.Textbox(label="Parameter 2", visible=False)
+                                template_param3 = gr.Textbox(label="Parameter 3", visible=False)
+                                template_param4 = gr.Textbox(label="Parameter 4", visible=False)
+                                template_param5 = gr.Textbox(label="Parameter 5", visible=False)
+
+                                apply_template_button = gr.Button("📋 Apply Template", variant="secondary", size="sm")
+
+                            # Suggestions display
+                            suggestions_display = gr.Markdown(visible=False, label="Suggestions")
 
                         with gr.Accordion("Advanced Settings", open=False):
                             # Aspect ratio presets
@@ -891,6 +1105,114 @@ def create_ui():
             outputs=[batch_width, batch_height]
         )
 
+        # Prompt enhancement event handlers
+        enhance_button.click(
+            fn=enhance_prompt_with_settings,
+            inputs=[prompt_input, style_selector, quality_selector, add_details_checkbox],
+            outputs=[prompt_input]
+        )
+
+        negative_defaults_button.click(
+            fn=generate_negative_prompt_from_defaults,
+            outputs=[negative_prompt_input]
+        )
+
+        def show_suggestions(prompt):
+            """Show suggestions and make visible."""
+            suggestions = get_prompt_suggestions(prompt)
+            return gr.Markdown(value=suggestions, visible=True)
+
+        suggestions_button.click(
+            fn=show_suggestions,
+            inputs=[prompt_input],
+            outputs=[suggestions_display]
+        )
+
+        # Template event handlers
+        def update_template_ui(template_choice):
+            """Update UI when template is selected."""
+            if template_choice == "None":
+                return (
+                    "Select a template to see required parameters",
+                    gr.Textbox(visible=False), gr.Textbox(visible=False),
+                    gr.Textbox(visible=False), gr.Textbox(visible=False),
+                    gr.Textbox(visible=False)
+                )
+
+            template = PromptLibrary.get_template(template_choice.lower())
+            if template is None:
+                return (
+                    "Template not found",
+                    gr.Textbox(visible=False), gr.Textbox(visible=False),
+                    gr.Textbox(visible=False), gr.Textbox(visible=False),
+                    gr.Textbox(visible=False)
+                )
+
+            # Extract parameters from template
+            import re
+            params = re.findall(r'\{(\w+)\}', template.template)
+
+            info = f"**{template.name.title()}**: {template.description}\n\n"
+            info += f"**Example**: {template.example}\n\n"
+            info += f"**Required parameters**: {', '.join(params)}"
+
+            # Show textboxes for each parameter
+            textboxes = []
+            for i in range(5):
+                if i < len(params):
+                    textboxes.append(gr.Textbox(label=params[i].replace('_', ' ').title(), visible=True, placeholder=f"Enter {params[i]}"))
+                else:
+                    textboxes.append(gr.Textbox(visible=False))
+
+            return (info, *textboxes)
+
+        template_selector.change(
+            fn=update_template_ui,
+            inputs=[template_selector],
+            outputs=[template_info, template_param1, template_param2, template_param3, template_param4, template_param5]
+        )
+
+        def apply_template_to_prompt(template_choice, p1, p2, p3, p4, p5):
+            """Apply selected template with parameters."""
+            if template_choice == "None":
+                return ""
+
+            template = PromptLibrary.get_template(template_choice.lower())
+            if template is None:
+                return "Template not found"
+
+            # Extract parameter names
+            import re
+            params = re.findall(r'\{(\w+)\}', template.template)
+
+            # Build parameter dict with all parameters
+            param_values = [p1, p2, p3, p4, p5]
+            param_dict = {}
+            missing_params = []
+
+            for i, param_name in enumerate(params):
+                if i < len(param_values) and param_values[i]:
+                    param_dict[param_name] = param_values[i]
+                else:
+                    # Use placeholder for missing parameters
+                    param_dict[param_name] = f"[{param_name.replace('_', ' ')}]"
+                    missing_params.append(param_name)
+
+            try:
+                result = template.format(**param_dict)
+                if missing_params:
+                    # Add note about missing parameters
+                    result += f" (Note: Fill in [{', '.join(missing_params)}] placeholders)"
+                return result
+            except KeyError as e:
+                return f"Error: Missing required parameter: {e}"
+
+        apply_template_button.click(
+            fn=apply_template_to_prompt,
+            inputs=[template_selector, template_param1, template_param2, template_param3, template_param4, template_param5],
+            outputs=[prompt_input]
+        )
+
         # Footer
         gr.Markdown(
             """
@@ -903,16 +1225,19 @@ def create_ui():
             - 📸 **History gallery**: View and manage all generated images (Stage 3)
             - 🎲 **Batch generation**: Create multiple variations with different seeds (Stage 3)
             - 📐 **Aspect ratio presets**: Quick Square/Portrait/Landscape/Widescreen selection (Stage 3)
+            - ✨ **Prompt enhancement**: 10 style presets, 4 quality levels, 8 templates (Improvement #2)
 
             **Tips:**
             - **Auto mode**: Uses configured primary backend with automatic fallback
             - **Specific backend**: Choose HuggingFace or Replicate to use only that service
+            - **Prompt Enhancement**: Use style presets (Photorealistic, Anime, etc.) and quality levels to improve prompts
+            - **Templates**: Start with pre-built templates for portraits, landscapes, characters, and more
+            - **Suggestions**: Click "Get Suggestions" to analyze your prompt and see enhancement examples
+            - **Negative defaults**: Auto-fill negative prompt with common unwanted terms
             - **Download**: Select format and click download to save with metadata
             - **History**: Click images to view details, reuse prompts, or clear history
             - **Batch**: Generate 2-9 variations at once, all added to history
             - **Aspect ratios**: Use presets for common sizes or select "Custom" for manual control
-            - Use descriptive prompts for better results
-            - Negative prompts help avoid unwanted elements
             """
         )
 
@@ -926,6 +1251,6 @@ if __name__ == "__main__":
     logger.info("Launching Gradio application...")
     demo.launch(
         server_name="0.0.0.0",
-        server_port=7860,
+        server_port=7861,
         share=False
     )
