@@ -4,9 +4,10 @@ import logging
 from typing import Optional
 from pathlib import Path
 import io
+from datetime import datetime
 
 from src.core.base_backend import BaseBackend
-from src.core.models import GenerationRequest
+from src.core.models import GenerationRequest, GeneratedImage
 
 logger = logging.getLogger(__name__)
 
@@ -105,14 +106,14 @@ class LocalBackend(BaseBackend):
             logger.error(f"Failed to load model {self.model}: {e}")
             raise
 
-    def generate_image(self, request: GenerationRequest) -> bytes:
+    def generate_image(self, request: GenerationRequest) -> GeneratedImage:
         """Generate an image locally using the Diffusers pipeline.
 
         Args:
             request: Generation parameters
 
         Returns:
-            Generated image as PNG bytes
+            GeneratedImage with the generated image data
 
         Raises:
             RuntimeError: If generation fails
@@ -149,10 +150,27 @@ class LocalBackend(BaseBackend):
             # Convert to bytes
             img_bytes = io.BytesIO()
             image.save(img_bytes, format='PNG')
-            img_bytes.seek(0)
+            image_data = img_bytes.getvalue()
 
-            logger.info("Image generated successfully")
-            return img_bytes.getvalue()
+            # Create response
+            generated_image = GeneratedImage(
+                image_data=image_data,
+                prompt=request.prompt,
+                backend=self.name,
+                timestamp=datetime.now(),
+                metadata={
+                    "model": self.model,
+                    "guidance_scale": request.guidance_scale,
+                    "num_inference_steps": request.num_inference_steps,
+                    "width": request.width,
+                    "height": request.height,
+                    "negative_prompt": request.negative_prompt,
+                    "seed": request.seed,
+                }
+            )
+
+            logger.info(f"Successfully generated image ({len(image_data)} bytes)")
+            return generated_image
 
         except Exception as e:
             error_msg = f"Local generation failed: {str(e)}"
