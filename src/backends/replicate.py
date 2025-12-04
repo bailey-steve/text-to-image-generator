@@ -88,18 +88,42 @@ class ReplicateBackend(BaseBackend):
 
             # Add image-to-image specific parameters
             if is_img2img:
-                # Convert init_image bytes to base64 data URI
+                # Resize image if too large to avoid OOM errors
+                # SDXL can handle up to 1024x1024 reliably
                 import base64
-                image_base64 = base64.b64encode(request.init_image).decode('utf-8')
-                # Detect image format
+                pil_image = Image.open(io.BytesIO(request.init_image))
+
+                # Resize if image is too large (max 1024 on longest side)
+                max_size = 1024
+                if max(pil_image.size) > max_size:
+                    # Calculate new size maintaining aspect ratio
+                    ratio = max_size / max(pil_image.size)
+                    new_size = tuple(int(dim * ratio) for dim in pil_image.size)
+                    pil_image = pil_image.resize(new_size, Image.Resampling.LANCZOS)
+                    logger.info(f"Resized image from {Image.open(io.BytesIO(request.init_image)).size} to {new_size}")
+
+                # Convert back to bytes
+                img_byte_arr = io.BytesIO()
+                # Detect format from original image
                 if request.init_image.startswith(b'\x89PNG'):
+                    pil_image.save(img_byte_arr, format='PNG')
                     mime_type = 'image/png'
                 elif request.init_image.startswith(b'\xff\xd8'):
+                    pil_image.save(img_byte_arr, format='JPEG', quality=95)
                     mime_type = 'image/jpeg'
                 else:
-                    mime_type = 'image/png'  # default
+                    pil_image.save(img_byte_arr, format='PNG')
+                    mime_type = 'image/png'
+
+                resized_image_bytes = img_byte_arr.getvalue()
+                image_base64 = base64.b64encode(resized_image_bytes).decode('utf-8')
 
                 input_params["image"] = f"data:{mime_type};base64,{image_base64}"
+
+                # Add width/height to constrain output size for SDXL
+                if "sdxl" in self.model.lower() or "stability-ai" in self.model.lower():
+                    input_params["width"] = pil_image.size[0]
+                    input_params["height"] = pil_image.size[1]
 
                 # Different models use different parameter names for strength
                 # SDXL uses "prompt_strength", some models use "strength"
