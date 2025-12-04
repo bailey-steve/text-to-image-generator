@@ -49,6 +49,7 @@ class LocalBackend(BaseBackend):
         self.model = model or self.DEFAULT_MODEL
         self.cache_dir = Path(cache_dir) if cache_dir else None
         self.pipeline = None
+        self.img2img_pipeline = None
 
         logger.info(f"Initializing LocalBackend with model: {self.model}")
 
@@ -63,7 +64,7 @@ class LocalBackend(BaseBackend):
         return self.SUPPORTED_MODELS.copy()
 
     def _load_pipeline(self):
-        """Load the Diffusers pipeline.
+        """Load the Diffusers text-to-image pipeline.
 
         This downloads the model if not cached and loads it for inference.
         Uses CPU-optimized settings for best performance.
@@ -75,7 +76,7 @@ class LocalBackend(BaseBackend):
             from diffusers import AutoPipelineForText2Image
             import torch
 
-            logger.info(f"Loading model {self.model}...")
+            logger.info(f"Loading text-to-image model {self.model}...")
 
             # Load pipeline with CPU optimization
             self.pipeline = AutoPipelineForText2Image.from_pretrained(
@@ -95,7 +96,7 @@ class LocalBackend(BaseBackend):
             except Exception:
                 pass  # Not all models support this
 
-            logger.info(f"Model {self.model} loaded successfully")
+            logger.info(f"Text-to-image model {self.model} loaded successfully")
 
         except ImportError as e:
             raise ImportError(
@@ -106,8 +107,54 @@ class LocalBackend(BaseBackend):
             logger.error(f"Failed to load model {self.model}: {e}")
             raise
 
+    def _load_img2img_pipeline(self):
+        """Load the Diffusers image-to-image pipeline.
+
+        This downloads the model if not cached and loads it for inference.
+        Uses CPU-optimized settings for best performance.
+        """
+        if self.img2img_pipeline is not None:
+            return
+
+        try:
+            from diffusers import AutoPipelineForImage2Image
+            import torch
+
+            logger.info(f"Loading image-to-image model {self.model}...")
+
+            # Load pipeline with CPU optimization
+            self.img2img_pipeline = AutoPipelineForImage2Image.from_pretrained(
+                self.model,
+                torch_dtype=torch.float32,  # Use float32 for CPU
+                cache_dir=str(self.cache_dir) if self.cache_dir else None,
+                safety_checker=None,  # Disable for faster inference
+                requires_safety_checker=False
+            )
+
+            # Move to CPU and optimize
+            self.img2img_pipeline = self.img2img_pipeline.to("cpu")
+
+            # Enable memory efficient attention if available
+            try:
+                self.img2img_pipeline.enable_attention_slicing()
+            except Exception:
+                pass  # Not all models support this
+
+            logger.info(f"Image-to-image model {self.model} loaded successfully")
+
+        except ImportError as e:
+            raise ImportError(
+                "Missing required dependencies for local backend. "
+                "Install with: pip install torch diffusers transformers accelerate"
+            ) from e
+        except Exception as e:
+            logger.error(f"Failed to load image-to-image model {self.model}: {e}")
+            raise
+
     def generate_image(self, request: GenerationRequest) -> GeneratedImage:
         """Generate an image locally using the Diffusers pipeline.
+
+        Supports both text-to-image and image-to-image generation.
 
         Args:
             request: Generation parameters
@@ -118,20 +165,39 @@ class LocalBackend(BaseBackend):
         Raises:
             RuntimeError: If generation fails
         """
-        # Load pipeline if not already loaded
-        self._load_pipeline()
+        from PIL import Image
+
+        # Determine if this is image-to-image or text-to-image
+        is_img2img = request.init_image is not None
+
+        if is_img2img:
+            # Load image-to-image pipeline
+            self._load_img2img_pipeline()
+            pipeline = self.img2img_pipeline
+            logger.info(f"Generating image-to-image locally with prompt: {request.prompt[:50]}...")
+        else:
+            # Load text-to-image pipeline
+            self._load_pipeline()
+            pipeline = self.pipeline
+            logger.info(f"Generating text-to-image locally with prompt: {request.prompt[:50]}...")
 
         try:
-            logger.info(f"Generating image locally with prompt: {request.prompt[:50]}...")
-
             # Prepare generation kwargs
             generation_kwargs = {
                 "prompt": request.prompt,
                 "num_inference_steps": request.num_inference_steps,
                 "guidance_scale": request.guidance_scale,
-                "width": request.width,
-                "height": request.height,
             }
+
+            # Add type-specific parameters
+            if is_img2img:
+                # Convert init_image bytes to PIL Image
+                init_image_pil = Image.open(io.BytesIO(request.init_image))
+                generation_kwargs["image"] = init_image_pil
+                generation_kwargs["strength"] = request.strength
+            else:
+                generation_kwargs["width"] = request.width
+                generation_kwargs["height"] = request.height
 
             # Add negative prompt if provided
             if request.negative_prompt:
@@ -144,7 +210,7 @@ class LocalBackend(BaseBackend):
                 generation_kwargs["generator"] = generator
 
             # Generate image
-            result = self.pipeline(**generation_kwargs)
+            result = pipeline(**generation_kwargs)
             image = result.images[0]
 
             # Convert to bytes
@@ -153,20 +219,28 @@ class LocalBackend(BaseBackend):
             image_data = img_bytes.getvalue()
 
             # Create response
+            metadata = {
+                "model": self.model,
+                "guidance_scale": request.guidance_scale,
+                "num_inference_steps": request.num_inference_steps,
+                "negative_prompt": request.negative_prompt,
+                "seed": request.seed,
+                "generation_type": "image-to-image" if is_img2img else "text-to-image",
+            }
+
+            # Add type-specific metadata
+            if is_img2img:
+                metadata["strength"] = request.strength
+            else:
+                metadata["width"] = request.width
+                metadata["height"] = request.height
+
             generated_image = GeneratedImage(
                 image_data=image_data,
                 prompt=request.prompt,
                 backend=self.name,
                 timestamp=datetime.now(),
-                metadata={
-                    "model": self.model,
-                    "guidance_scale": request.guidance_scale,
-                    "num_inference_steps": request.num_inference_steps,
-                    "width": request.width,
-                    "height": request.height,
-                    "negative_prompt": request.negative_prompt,
-                    "seed": request.seed,
-                }
+                metadata=metadata
             )
 
             logger.info(f"Successfully generated image ({len(image_data)} bytes)")
@@ -206,7 +280,8 @@ class LocalBackend(BaseBackend):
             )
 
         self.model = model
-        self.pipeline = None  # Reset pipeline to force reload
+        self.pipeline = None  # Reset pipelines to force reload
+        self.img2img_pipeline = None
         logger.info(f"Model set to: {model}")
 
     def __repr__(self) -> str:

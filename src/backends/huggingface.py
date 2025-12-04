@@ -48,6 +48,8 @@ class HuggingFaceBackend(BaseBackend):
     def generate_image(self, request: GenerationRequest) -> GeneratedImage:
         """Generate an image using HuggingFace Inference API.
 
+        Supports both text-to-image and image-to-image generation.
+
         Args:
             request: The generation request with prompt and parameters
 
@@ -59,40 +61,70 @@ class HuggingFaceBackend(BaseBackend):
             ConnectionError: If unable to connect to HuggingFace API
         """
         try:
-            logger.info(f"Generating image with prompt: {request.prompt[:50]}...")
+            import io
+            from PIL import Image
 
-            # Call HuggingFace Inference API
-            image = self.client.text_to_image(
-                prompt=request.prompt,
-                negative_prompt=request.negative_prompt,
-                model=self.model,
-                guidance_scale=request.guidance_scale,
-                num_inference_steps=request.num_inference_steps,
-                width=request.width,
-                height=request.height,
-            )
+            # Determine if this is image-to-image or text-to-image
+            is_img2img = request.init_image is not None
+
+            if is_img2img:
+                logger.info(f"Generating image-to-image with prompt: {request.prompt[:50]}...")
+
+                # Convert init_image bytes to PIL Image
+                init_image_pil = Image.open(io.BytesIO(request.init_image))
+
+                # Call HuggingFace image-to-image API
+                image = self.client.image_to_image(
+                    image=init_image_pil,
+                    prompt=request.prompt,
+                    negative_prompt=request.negative_prompt,
+                    model=self.model,
+                    guidance_scale=request.guidance_scale,
+                    num_inference_steps=request.num_inference_steps,
+                    strength=request.strength,
+                )
+            else:
+                logger.info(f"Generating text-to-image with prompt: {request.prompt[:50]}...")
+
+                # Call HuggingFace text-to-image API
+                image = self.client.text_to_image(
+                    prompt=request.prompt,
+                    negative_prompt=request.negative_prompt,
+                    model=self.model,
+                    guidance_scale=request.guidance_scale,
+                    num_inference_steps=request.num_inference_steps,
+                    width=request.width,
+                    height=request.height,
+                )
 
             # Convert PIL Image to bytes
-            import io
             img_byte_arr = io.BytesIO()
             image.save(img_byte_arr, format='PNG')
             image_data = img_byte_arr.getvalue()
 
             # Create response
+            metadata = {
+                "model": self.model,
+                "guidance_scale": request.guidance_scale,
+                "num_inference_steps": request.num_inference_steps,
+                "negative_prompt": request.negative_prompt,
+                "seed": request.seed,
+                "generation_type": "image-to-image" if is_img2img else "text-to-image",
+            }
+
+            # Add type-specific metadata
+            if is_img2img:
+                metadata["strength"] = request.strength
+            else:
+                metadata["width"] = request.width
+                metadata["height"] = request.height
+
             result = GeneratedImage(
                 image_data=image_data,
                 prompt=request.prompt,
                 backend=self.name,
                 timestamp=datetime.now(),
-                metadata={
-                    "model": self.model,
-                    "guidance_scale": request.guidance_scale,
-                    "num_inference_steps": request.num_inference_steps,
-                    "width": request.width,
-                    "height": request.height,
-                    "negative_prompt": request.negative_prompt,
-                    "seed": request.seed,
-                }
+                metadata=metadata
             )
 
             logger.info(f"Successfully generated image ({len(image_data)} bytes)")

@@ -239,6 +239,140 @@ def generate_batch_images(
     return images, info_message
 
 
+def generate_image_to_image(
+    input_image: Optional[Image.Image],
+    prompt: str,
+    strength: float = 0.8,
+    backend_choice: str = "auto",
+    negative_prompt: str = "",
+    guidance_scale: float = 7.5,
+    num_steps: int = 4
+) -> Tuple[Optional[Image.Image], str]:
+    """Generate an image from an input image and text prompt.
+
+    Args:
+        input_image: PIL Image to transform
+        prompt: Text description of desired transformation
+        strength: How much to transform (0.0-1.0)
+        backend_choice: Backend to use
+        negative_prompt: What to avoid
+        guidance_scale: How closely to follow prompt
+        num_steps: Number of inference steps
+
+    Returns:
+        Tuple of (PIL Image object or None, status message)
+    """
+    if input_image is None:
+        return None, "Error: Please upload an input image"
+
+    if not prompt or prompt.strip() == "":
+        return None, "Error: Please enter a prompt"
+
+    if generator is None:
+        return None, "❌ Error: Generator not initialized"
+
+    try:
+        logger.info(f"Generating image-to-image with prompt: {prompt[:50]}...")
+
+        # Convert PIL Image to bytes
+        import io
+        img_byte_arr = io.BytesIO()
+        input_image.save(img_byte_arr, format='PNG')
+        init_image_bytes = img_byte_arr.getvalue()
+
+        # Create generation request
+        request = GenerationRequest(
+            prompt=prompt.strip(),
+            negative_prompt=negative_prompt.strip() if negative_prompt else None,
+            guidance_scale=guidance_scale,
+            num_inference_steps=num_steps,
+            init_image=init_image_bytes,
+            strength=strength,
+            width=512,  # These are ignored for img2img but required by model
+            height=512
+        )
+
+        # Determine whether to use fallback
+        use_fallback = (backend_choice == "auto")
+
+        # If user selected specific backend, temporarily switch primary
+        if backend_choice != "auto":
+            original_primary = generator.primary_backend
+
+            try:
+                if backend_choice == "huggingface" and settings.huggingface_token:
+                    temp_backend = BackendFactory.create_backend(
+                        "huggingface",
+                        settings.huggingface_token
+                    )
+                    generator.primary_backend = temp_backend
+                    use_fallback = False
+                elif backend_choice == "replicate" and settings.replicate_token:
+                    temp_backend = BackendFactory.create_backend(
+                        "replicate",
+                        settings.replicate_token
+                    )
+                    generator.primary_backend = temp_backend
+                    use_fallback = False
+                elif backend_choice == "local":
+                    temp_backend = BackendFactory.create_backend(
+                        "local",
+                        model=settings.local_model
+                    )
+                    generator.primary_backend = temp_backend
+                    use_fallback = False
+
+                result = generator.generate_image(request, use_fallback=use_fallback)
+
+            finally:
+                generator.primary_backend = original_primary
+        else:
+            # Use auto mode with fallback
+            result = generator.generate_image(request, use_fallback=True)
+
+        # Store globally for download
+        global last_generated_image
+        last_generated_image = result
+
+        # Add to history
+        history_manager.add(result)
+
+        # Convert bytes to PIL Image
+        output_image = Image.open(io.BytesIO(result.image_data))
+
+        # Create info message
+        info_message = (
+            f"✅ Image transformed successfully!\n"
+            f"Backend: {result.backend}\n"
+            f"Model: {result.metadata.get('model', 'N/A')}\n"
+            f"Strength: {strength}\n"
+            f"Steps: {num_steps}\n"
+            f"Guidance Scale: {guidance_scale}"
+        )
+
+        return output_image, info_message
+
+    except ValueError as e:
+        error_msg = f"❌ Invalid parameters: {e}"
+        logger.error(error_msg)
+        return None, error_msg
+
+    except ConnectionError as e:
+        error_msg = f"❌ Connection error: {e}"
+        logger.error(error_msg)
+        return None, error_msg
+
+    except RuntimeError as e:
+        error_msg = f"❌ Generation failed: {e}"
+        logger.error(error_msg)
+        return None, error_msg
+
+    except Exception as e:
+        error_msg = f"❌ Unexpected error: {e}"
+        logger.exception(error_msg)
+        return None, error_msg
+
+
 def generate_image(
     prompt: str,
     backend_choice: str = "auto",
@@ -983,6 +1117,94 @@ def create_ui():
                             interactive=False
                         )
 
+            # Image-to-Image Tab
+            with gr.Tab("🖼️ Image-to-Image"):
+                gr.Markdown("Transform an existing image based on a text prompt. Upload an image and describe how you want to change it.")
+
+                with gr.Row():
+                    with gr.Column(scale=1):
+                        # Input image upload
+                        img2img_input_image = gr.Image(
+                            label="Input Image",
+                            type="pil",
+                            sources=["upload", "clipboard"],
+                            show_label=True
+                        )
+
+                        img2img_prompt_input = gr.Textbox(
+                            label="Prompt",
+                            placeholder="Describe how you want to transform the image...",
+                            lines=3,
+                            value="Turn this into a watercolor painting"
+                        )
+
+                        img2img_negative_prompt_input = gr.Textbox(
+                            label="Negative Prompt (optional)",
+                            placeholder="What to avoid in the image...",
+                            lines=2,
+                            value="blurry, low quality, distorted"
+                        )
+
+                        img2img_strength_slider = gr.Slider(
+                            minimum=0.0,
+                            maximum=1.0,
+                            value=0.8,
+                            step=0.05,
+                            label="Transformation Strength",
+                            info="0 = keep original, 1 = completely new image"
+                        )
+
+                        img2img_backend_selector = gr.Radio(
+                            choices=["auto", "huggingface", "replicate", "local"],
+                            value="auto",
+                            label="Backend Selection",
+                            info="Auto uses primary with fallback"
+                        )
+
+                        with gr.Accordion("Advanced Settings", open=False):
+                            img2img_guidance_scale = gr.Slider(
+                                minimum=1.0,
+                                maximum=20.0,
+                                value=7.5,
+                                step=0.5,
+                                label="Guidance Scale"
+                            )
+
+                            img2img_num_steps = gr.Slider(
+                                minimum=1,
+                                maximum=16,
+                                value=4,
+                                step=1,
+                                label="Inference Steps"
+                            )
+
+                        img2img_generate_btn = gr.Button("🖼️ Transform Image", variant="primary", size="lg")
+
+                    with gr.Column(scale=1):
+                        # Output
+                        img2img_output_image = gr.Image(
+                            label="Transformed Image",
+                            type="pil",
+                            show_label=True
+                        )
+
+                        img2img_output_info = gr.Textbox(
+                            label="Generation Info",
+                            lines=8,
+                            interactive=False
+                        )
+
+                # Examples
+                gr.Examples(
+                    examples=[
+                        ["Turn this into a watercolor painting", 0.7],
+                        ["Make it look like a cyberpunk scene at night", 0.8],
+                        ["Transform into an oil painting in Van Gogh style", 0.75],
+                        ["Add dramatic sunset lighting", 0.6],
+                    ],
+                    inputs=[img2img_prompt_input, img2img_strength_slider],
+                )
+
         # Event handlers
         gen_event = generate_btn.click(
             fn=generate_image,
@@ -1076,6 +1298,27 @@ def create_ui():
 
         # Update history after batch generation
         batch_gen_event.then(
+            fn=get_history_gallery,
+            outputs=[history_gallery, history_count]
+        )
+
+        # Image-to-Image event handlers
+        img2img_gen_event = img2img_generate_btn.click(
+            fn=generate_image_to_image,
+            inputs=[
+                img2img_input_image,
+                img2img_prompt_input,
+                img2img_strength_slider,
+                img2img_backend_selector,
+                img2img_negative_prompt_input,
+                img2img_guidance_scale,
+                img2img_num_steps
+            ],
+            outputs=[img2img_output_image, img2img_output_info]
+        )
+
+        # Update history after img2img generation
+        img2img_gen_event.then(
             fn=get_history_gallery,
             outputs=[history_gallery, history_count]
         )
@@ -1226,6 +1469,7 @@ def create_ui():
             - 🎲 **Batch generation**: Create multiple variations with different seeds (Stage 3)
             - 📐 **Aspect ratio presets**: Quick Square/Portrait/Landscape/Widescreen selection (Stage 3)
             - ✨ **Prompt enhancement**: 10 style presets, 4 quality levels, 8 templates (Improvement #2)
+            - 🖼️ **Image-to-Image**: Transform existing images with text prompts (Improvement #3)
 
             **Tips:**
             - **Auto mode**: Uses configured primary backend with automatic fallback
@@ -1234,6 +1478,7 @@ def create_ui():
             - **Templates**: Start with pre-built templates for portraits, landscapes, characters, and more
             - **Suggestions**: Click "Get Suggestions" to analyze your prompt and see enhancement examples
             - **Negative defaults**: Auto-fill negative prompt with common unwanted terms
+            - **Image-to-Image**: Upload an image and describe how to transform it. Strength controls how much it changes (0=original, 1=new)
             - **Download**: Select format and click download to save with metadata
             - **History**: Click images to view details, reuse prompts, or clear history
             - **Batch**: Generate 2-9 variations at once, all added to history

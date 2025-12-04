@@ -28,8 +28,14 @@ class BaseBackend(ABC):
     def generate_image(self, request: GenerationRequest) -> GeneratedImage:
         """Generate an image from a text prompt.
 
+        Supports both text-to-image and image-to-image generation:
+        - Text-to-image: When request.init_image is None
+        - Image-to-image: When request.init_image contains image bytes
+          (uses request.strength to control transformation amount)
+
         Args:
             request: The generation request containing prompt and parameters
+                     For image-to-image, also includes init_image and strength
 
         Returns:
             GeneratedImage containing the image data and metadata

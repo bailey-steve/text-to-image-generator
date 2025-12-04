@@ -16,6 +16,8 @@ class GenerationRequest(BaseModel):
         seed: Random seed for reproducibility (None = random)
         width: Output image width in pixels
         height: Output image height in pixels
+        init_image: Optional initial image for image-to-image generation (PNG/JPEG bytes)
+        strength: Strength of transformation for image-to-image (0.0-1.0, higher = more change)
     """
 
     prompt: str = Field(
@@ -56,6 +58,16 @@ class GenerationRequest(BaseModel):
         ge=256,
         le=1024,
         description="Output image height in pixels"
+    )
+    init_image: Optional[bytes] = Field(
+        default=None,
+        description="Initial image for image-to-image generation (PNG/JPEG bytes)"
+    )
+    strength: float = Field(
+        default=0.8,
+        ge=0.0,
+        le=1.0,
+        description="Transformation strength for image-to-image (0.0=no change, 1.0=full transformation)"
     )
 
     class Config:

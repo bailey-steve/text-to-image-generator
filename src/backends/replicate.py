@@ -51,6 +51,8 @@ class ReplicateBackend(BaseBackend):
     def generate_image(self, request: GenerationRequest) -> GeneratedImage:
         """Generate an image using Replicate API.
 
+        Supports both text-to-image and image-to-image generation.
+
         Args:
             request: The generation request with prompt and parameters
 
@@ -62,15 +64,39 @@ class ReplicateBackend(BaseBackend):
             ConnectionError: If unable to connect to Replicate API
         """
         try:
-            logger.info(f"Generating image with prompt: {request.prompt[:50]}...")
+            # Determine if this is image-to-image or text-to-image
+            is_img2img = request.init_image is not None
+
+            if is_img2img:
+                logger.info(f"Generating image-to-image with prompt: {request.prompt[:50]}...")
+            else:
+                logger.info(f"Generating text-to-image with prompt: {request.prompt[:50]}...")
 
             # Prepare input for Replicate
             input_params = {
                 "prompt": request.prompt,
                 "num_inference_steps": min(request.num_inference_steps, 16),  # FLUX limit
-                "width": request.width,
-                "height": request.height,
             }
+
+            # Add image-to-image specific parameters
+            if is_img2img:
+                # Convert init_image bytes to base64 data URI
+                import base64
+                image_base64 = base64.b64encode(request.init_image).decode('utf-8')
+                # Detect image format
+                if request.init_image.startswith(b'\x89PNG'):
+                    mime_type = 'image/png'
+                elif request.init_image.startswith(b'\xff\xd8'):
+                    mime_type = 'image/jpeg'
+                else:
+                    mime_type = 'image/png'  # default
+
+                input_params["image"] = f"data:{mime_type};base64,{image_base64}"
+                input_params["prompt_strength"] = request.strength
+            else:
+                # Text-to-image specific parameters
+                input_params["width"] = request.width
+                input_params["height"] = request.height
 
             # Add optional parameters if supported
             if request.negative_prompt:
@@ -80,7 +106,7 @@ class ReplicateBackend(BaseBackend):
                 input_params["seed"] = request.seed
 
             # Run the model
-            logger.debug(f"Calling Replicate API with params: {input_params}")
+            logger.debug(f"Calling Replicate API with params: {list(input_params.keys())}")
             output = self.client.run(
                 self.model,
                 input=input_params
@@ -99,20 +125,28 @@ class ReplicateBackend(BaseBackend):
             image_data = response.content
 
             # Create response
+            metadata = {
+                "model": self.model,
+                "num_inference_steps": request.num_inference_steps,
+                "negative_prompt": request.negative_prompt,
+                "seed": request.seed,
+                "image_url": str(image_url),
+                "generation_type": "image-to-image" if is_img2img else "text-to-image",
+            }
+
+            # Add type-specific metadata
+            if is_img2img:
+                metadata["strength"] = request.strength
+            else:
+                metadata["width"] = request.width
+                metadata["height"] = request.height
+
             result = GeneratedImage(
                 image_data=image_data,
                 prompt=request.prompt,
                 backend=self.name,
                 timestamp=datetime.now(),
-                metadata={
-                    "model": self.model,
-                    "num_inference_steps": request.num_inference_steps,
-                    "width": request.width,
-                    "height": request.height,
-                    "negative_prompt": request.negative_prompt,
-                    "seed": request.seed,
-                    "image_url": str(image_url),
-                }
+                metadata=metadata
             )
 
             logger.info(f"Successfully generated image ({len(image_data)} bytes)")
