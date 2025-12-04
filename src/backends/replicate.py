@@ -75,8 +75,15 @@ class ReplicateBackend(BaseBackend):
             # Prepare input for Replicate
             input_params = {
                 "prompt": request.prompt,
-                "num_inference_steps": min(request.num_inference_steps, 16),  # FLUX limit
             }
+
+            # Adjust inference steps based on model
+            # FLUX models: max 16 steps (optimized for 4)
+            # SDXL/SD models: typically 20-50 steps
+            if "flux" in self.model.lower():
+                input_params["num_inference_steps"] = min(request.num_inference_steps, 16)
+            else:
+                input_params["num_inference_steps"] = request.num_inference_steps
 
             # Add image-to-image specific parameters
             if is_img2img:
@@ -92,7 +99,13 @@ class ReplicateBackend(BaseBackend):
                     mime_type = 'image/png'  # default
 
                 input_params["image"] = f"data:{mime_type};base64,{image_base64}"
-                input_params["prompt_strength"] = request.strength
+
+                # Different models use different parameter names for strength
+                # SDXL uses "prompt_strength", some models use "strength"
+                if "sdxl" in self.model.lower() or "stability-ai" in self.model.lower():
+                    input_params["prompt_strength"] = request.strength
+                else:
+                    input_params["strength"] = request.strength
             else:
                 # Text-to-image specific parameters
                 input_params["width"] = request.width

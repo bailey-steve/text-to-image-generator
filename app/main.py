@@ -1181,10 +1181,11 @@ def create_ui():
 
                             img2img_num_steps = gr.Slider(
                                 minimum=1,
-                                maximum=16,
-                                value=4,
+                                maximum=50,
+                                value=20,
                                 step=1,
-                                label="Inference Steps"
+                                label="Inference Steps",
+                                info="SDXL: 20-30 recommended, FLUX: 4-8"
                             )
 
                         img2img_generate_btn = gr.Button("🖼️ Transform Image", variant="primary", size="lg")
