@@ -18,6 +18,7 @@ from src.utils.prompt_enhancer import (
     PromptQuality,
     PromptLibrary
 )
+from src.utils.face_restoration import get_face_restoration
 
 # Configure logging
 logging.basicConfig(
@@ -378,6 +379,77 @@ def generate_image_to_image(
         error_msg = f"❌ Unexpected error: {e}"
         logger.exception(error_msg)
         return None, error_msg
+
+
+def enhance_faces(
+    image: Optional[Image.Image],
+    scale: int = 2
+) -> Tuple[Optional[Image.Image], str, bool]:
+    """Enhance faces in an image using GFPGAN.
+
+    Args:
+        image: PIL Image to enhance
+        scale: Upscaling factor (1-4)
+
+    Returns:
+        Tuple of (Enhanced PIL Image or None, status message, button visibility)
+    """
+    if image is None:
+        return None, "Error: No image to enhance", False
+
+    if not settings.replicate_token:
+        return image, "❌ Error: Replicate API token required for face enhancement", True
+
+    try:
+        logger.info("Enhancing faces in image...")
+
+        # Convert PIL Image to bytes
+        img_byte_arr = io.BytesIO()
+        image.save(img_byte_arr, format='PNG')
+        image_bytes = img_byte_arr.getvalue()
+
+        # Get face restoration instance
+        face_restorer = get_face_restoration(settings.replicate_token)
+
+        # Enhance faces
+        enhanced_bytes = face_restorer.enhance_faces(
+            image_data=image_bytes,
+            scale=scale,
+            version="v1.4"
+        )
+
+        # Convert back to PIL Image
+        enhanced_image = Image.open(io.BytesIO(enhanced_bytes))
+
+        info_message = (
+            f"✨ Faces enhanced successfully!\n"
+            f"Model: GFPGAN v1.4\n"
+            f"Scale: {scale}x\n"
+            f"Cost: ~$0.0004"
+        )
+
+        logger.info("Face enhancement completed")
+        return enhanced_image, info_message, True
+
+    except ValueError as e:
+        error_msg = f"❌ Invalid parameters: {e}"
+        logger.error(error_msg)
+        return image, error_msg, True
+
+    except ConnectionError as e:
+        error_msg = f"❌ Connection error: {e}"
+        logger.error(error_msg)
+        return image, error_msg, True
+
+    except RuntimeError as e:
+        error_msg = f"❌ Face enhancement failed: {e}"
+        logger.error(error_msg)
+        return image, error_msg, True
+
+    except Exception as e:
+        error_msg = f"❌ Unexpected error: {e}"
+        logger.exception(error_msg)
+        return image, error_msg, True
 
 
 def generate_image(
@@ -1198,6 +1270,14 @@ def create_ui():
                             show_label=True
                         )
 
+                        # Face enhancement button
+                        img2img_enhance_faces_btn = gr.Button(
+                            "✨ Enhance Faces",
+                            variant="secondary",
+                            size="sm",
+                            visible=False
+                        )
+
                         img2img_output_info = gr.Textbox(
                             label="Generation Info",
                             lines=8,
@@ -1331,6 +1411,17 @@ def create_ui():
         img2img_gen_event.then(
             fn=get_history_gallery,
             outputs=[history_gallery, history_count]
+        ).then(
+            fn=lambda img: gr.update(visible=img is not None),
+            inputs=[img2img_output_image],
+            outputs=[img2img_enhance_faces_btn]
+        )
+
+        # Face enhancement button handler
+        img2img_enhance_faces_btn.click(
+            fn=enhance_faces,
+            inputs=[img2img_output_image],
+            outputs=[img2img_output_image, img2img_output_info, img2img_enhance_faces_btn]
         )
 
         # Aspect ratio preset handlers
