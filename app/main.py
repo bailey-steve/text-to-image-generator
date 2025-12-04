@@ -383,25 +383,27 @@ def generate_image_to_image(
 
 def enhance_faces(
     image: Optional[Image.Image],
+    weight: float = 0.5,
     scale: int = 2
-) -> Tuple[Optional[Image.Image], str, bool]:
+) -> Tuple[Optional[Image.Image], str, bool, bool]:
     """Enhance faces in an image using GFPGAN.
 
     Args:
         image: PIL Image to enhance
+        weight: Identity preservation weight (0-1)
         scale: Upscaling factor (1-4)
 
     Returns:
-        Tuple of (Enhanced PIL Image or None, status message, button visibility)
+        Tuple of (Enhanced PIL Image or None, status message, button visibility, slider visibility)
     """
     if image is None:
-        return None, "Error: No image to enhance", False
+        return None, "Error: No image to enhance", False, False
 
     if not settings.replicate_token:
-        return image, "❌ Error: Replicate API token required for face enhancement", True
+        return image, "❌ Error: Replicate API token required for face enhancement", True, True
 
     try:
-        logger.info("Enhancing faces in image...")
+        logger.info(f"Enhancing faces in image with weight={weight}...")
 
         # Convert PIL Image to bytes
         img_byte_arr = io.BytesIO()
@@ -415,7 +417,8 @@ def enhance_faces(
         enhanced_bytes = face_restorer.enhance_faces(
             image_data=image_bytes,
             scale=scale,
-            version="v1.4"
+            version="v1.4",
+            weight=weight
         )
 
         # Convert back to PIL Image
@@ -424,32 +427,33 @@ def enhance_faces(
         info_message = (
             f"✨ Faces enhanced successfully!\n"
             f"Model: GFPGAN v1.4\n"
+            f"Identity Preservation: {weight:.1f}\n"
             f"Scale: {scale}x\n"
             f"Cost: ~$0.0004"
         )
 
         logger.info("Face enhancement completed")
-        return enhanced_image, info_message, True
+        return enhanced_image, info_message, True, True
 
     except ValueError as e:
         error_msg = f"❌ Invalid parameters: {e}"
         logger.error(error_msg)
-        return image, error_msg, True
+        return image, error_msg, True, True
 
     except ConnectionError as e:
         error_msg = f"❌ Connection error: {e}"
         logger.error(error_msg)
-        return image, error_msg, True
+        return image, error_msg, True, True
 
     except RuntimeError as e:
         error_msg = f"❌ Face enhancement failed: {e}"
         logger.error(error_msg)
-        return image, error_msg, True
+        return image, error_msg, True, True
 
     except Exception as e:
         error_msg = f"❌ Unexpected error: {e}"
         logger.exception(error_msg)
-        return image, error_msg, True
+        return image, error_msg, True, True
 
 
 def generate_image(
@@ -1270,11 +1274,22 @@ def create_ui():
                             show_label=True
                         )
 
-                        # Face enhancement button
-                        img2img_enhance_faces_btn = gr.Button(
-                            "✨ Enhance Faces",
-                            variant="secondary",
-                            size="sm",
+                        # Face enhancement controls
+                        with gr.Row():
+                            img2img_enhance_faces_btn = gr.Button(
+                                "✨ Enhance Faces",
+                                variant="secondary",
+                                size="sm",
+                                visible=False
+                            )
+
+                        img2img_fidelity_slider = gr.Slider(
+                            minimum=0.0,
+                            maximum=1.0,
+                            value=0.5,
+                            step=0.1,
+                            label="Identity Preservation",
+                            info="0=keep original face, 0.5=balanced (recommended), 1=max enhancement",
                             visible=False
                         )
 
@@ -1412,16 +1427,16 @@ def create_ui():
             fn=get_history_gallery,
             outputs=[history_gallery, history_count]
         ).then(
-            fn=lambda img: gr.update(visible=img is not None),
+            fn=lambda img: (gr.update(visible=img is not None), gr.update(visible=img is not None)),
             inputs=[img2img_output_image],
-            outputs=[img2img_enhance_faces_btn]
+            outputs=[img2img_enhance_faces_btn, img2img_fidelity_slider]
         )
 
         # Face enhancement button handler
         img2img_enhance_faces_btn.click(
             fn=enhance_faces,
-            inputs=[img2img_output_image],
-            outputs=[img2img_output_image, img2img_output_info, img2img_enhance_faces_btn]
+            inputs=[img2img_output_image, img2img_fidelity_slider],
+            outputs=[img2img_output_image, img2img_output_info, img2img_enhance_faces_btn, img2img_fidelity_slider]
         )
 
         # Aspect ratio preset handlers

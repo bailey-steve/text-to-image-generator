@@ -196,6 +196,35 @@ class TestFaceRestoration:
         call_args = mock_client_instance.run.call_args
         assert "image/jpeg" in call_args[1]["input"]["img"]
 
+    def test_enhance_faces_with_custom_weight(
+        self,
+        mock_replicate_client,
+        mock_requests_get,
+        sample_image_bytes
+    ):
+        """Test enhance_faces with custom weight parameter."""
+        mock_client_instance = MagicMock()
+        mock_client_instance.run.return_value = "https://example.com/enhanced.png"
+        mock_replicate_client.return_value = mock_client_instance
+
+        restorer = FaceRestoration("test_api_key")
+        result = restorer.enhance_faces(sample_image_bytes, scale=2, weight=0.3)
+
+        assert result == b'enhanced_image_data'
+        # Verify weight was passed to API
+        call_args = mock_client_instance.run.call_args
+        assert call_args[1]["input"]["weight"] == 0.3
+
+    def test_enhance_faces_invalid_weight(self, mock_replicate_client, sample_image_bytes):
+        """Test enhance_faces with invalid weight."""
+        restorer = FaceRestoration("test_api_key")
+
+        with pytest.raises(ValueError, match="Weight must be between 0 and 1"):
+            restorer.enhance_faces(sample_image_bytes, weight=1.5)
+
+        with pytest.raises(ValueError, match="Weight must be between 0 and 1"):
+            restorer.enhance_faces(sample_image_bytes, weight=-0.1)
+
 
 class TestGlobalFaceRestoration:
     """Test global face restoration singleton."""

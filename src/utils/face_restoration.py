@@ -45,7 +45,8 @@ class FaceRestoration:
         self,
         image_data: bytes,
         scale: int = 2,
-        version: str = "v1.4"
+        version: str = "v1.4",
+        weight: float = 0.5
     ) -> bytes:
         """Enhance faces in an image using GFPGAN.
 
@@ -56,12 +57,16 @@ class FaceRestoration:
             image_data: Input image as bytes (PNG or JPEG)
             scale: Upscaling factor (1-4). Higher values increase resolution.
             version: GFPGAN version to use ("v1.3" or "v1.4")
+            weight: Fidelity weight (0-1). Controls identity preservation.
+                   0 = keep original face (no enhancement)
+                   0.5 = balanced (default, recommended)
+                   1 = maximum enhancement (may change identity)
 
         Returns:
             Enhanced image as bytes
 
         Raises:
-            ValueError: If image_data is empty or scale is out of range
+            ValueError: If image_data is empty or parameters are out of range
             ConnectionError: If unable to connect to Replicate API
             RuntimeError: If face enhancement fails
         """
@@ -74,8 +79,11 @@ class FaceRestoration:
         if version not in ["v1.3", "v1.4"]:
             raise ValueError("Version must be 'v1.3' or 'v1.4'")
 
+        if weight < 0 or weight > 1:
+            raise ValueError("Weight must be between 0 and 1")
+
         try:
-            logger.info(f"Enhancing faces with GFPGAN {version}, scale={scale}")
+            logger.info(f"Enhancing faces with GFPGAN {version}, scale={scale}, weight={weight}")
 
             # Convert to base64 data URI
             image_base64 = base64.b64encode(image_data).decode('utf-8')
@@ -97,7 +105,8 @@ class FaceRestoration:
                 input={
                     "img": data_uri,
                     "version": version,
-                    "scale": scale
+                    "scale": scale,
+                    "weight": weight
                 }
             )
 
