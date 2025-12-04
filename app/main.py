@@ -56,12 +56,14 @@ def create_generator() -> ImageGenerator:
         if settings.default_backend == "huggingface":
             primary = BackendFactory.create_backend(
                 "huggingface",
-                settings.huggingface_token
+                settings.huggingface_token,
+                model=settings.huggingface_model
             )
         elif settings.default_backend == "replicate":
             primary = BackendFactory.create_backend(
                 "replicate",
-                settings.replicate_token or ""
+                settings.replicate_token or "",
+                model=settings.replicate_model
             )
         elif settings.default_backend == "local":
             primary = BackendFactory.create_backend(
@@ -71,7 +73,8 @@ def create_generator() -> ImageGenerator:
         else:
             primary = BackendFactory.create_backend(
                 "huggingface",
-                settings.huggingface_token
+                settings.huggingface_token,
+                model=settings.huggingface_model
             )
 
         # Create fallback backends if enabled
@@ -82,14 +85,16 @@ def create_generator() -> ImageGenerator:
                     fallbacks.append(
                         BackendFactory.create_backend(
                             "replicate",
-                            settings.replicate_token
+                            settings.replicate_token,
+                            model=settings.replicate_model
                         )
                     )
                 elif settings.fallback_backend == "huggingface" and settings.huggingface_token:
                     fallbacks.append(
                         BackendFactory.create_backend(
                             "huggingface",
-                            settings.huggingface_token
+                            settings.huggingface_token,
+                            model=settings.huggingface_model
                         )
                     )
                 elif settings.fallback_backend == "local":
@@ -195,11 +200,11 @@ def generate_batch_images(
                 original_primary = generator.primary_backend
                 try:
                     if backend_choice == "huggingface" and settings.huggingface_token:
-                        temp_backend = BackendFactory.create_backend("huggingface", settings.huggingface_token)
+                        temp_backend = BackendFactory.create_backend("huggingface", settings.huggingface_token, model=settings.huggingface_model)
                         generator.primary_backend = temp_backend
                         use_fallback = False
                     elif backend_choice == "replicate" and settings.replicate_token:
-                        temp_backend = BackendFactory.create_backend("replicate", settings.replicate_token)
+                        temp_backend = BackendFactory.create_backend("replicate", settings.replicate_token, model=settings.replicate_model)
                         generator.primary_backend = temp_backend
                         use_fallback = False
                     elif backend_choice == "local":
@@ -303,14 +308,16 @@ def generate_image_to_image(
                 if backend_choice == "huggingface" and settings.huggingface_token:
                     temp_backend = BackendFactory.create_backend(
                         "huggingface",
-                        settings.huggingface_token
+                        settings.huggingface_token,
+                        model=settings.huggingface_model
                     )
                     generator.primary_backend = temp_backend
                     use_fallback = False
                 elif backend_choice == "replicate" and settings.replicate_token:
                     temp_backend = BackendFactory.create_backend(
                         "replicate",
-                        settings.replicate_token
+                        settings.replicate_token,
+                        model=settings.replicate_model
                     )
                     generator.primary_backend = temp_backend
                     use_fallback = False
@@ -428,14 +435,16 @@ def generate_image(
                 if backend_choice == "huggingface" and settings.huggingface_token:
                     temp_backend = BackendFactory.create_backend(
                         "huggingface",
-                        settings.huggingface_token
+                        settings.huggingface_token,
+                        model=settings.huggingface_model
                     )
                     generator.primary_backend = temp_backend
                     use_fallback = False
                 elif backend_choice == "replicate" and settings.replicate_token:
                     temp_backend = BackendFactory.create_backend(
                         "replicate",
-                        settings.replicate_token
+                        settings.replicate_token,
+                        model=settings.replicate_model
                     )
                     generator.primary_backend = temp_backend
                     use_fallback = False

@@ -31,6 +31,10 @@ class Settings(BaseSettings):
     huggingface_token: str = ""
     replicate_token: Optional[str] = None
 
+    # Model Configuration
+    huggingface_model: str = "stabilityai/stable-diffusion-xl-base-1.0"  # SDXL supports img2img
+    replicate_model: str = "black-forest-labs/flux-schnell"  # FLUX supports both
+
     # Application Settings
     default_backend: str = "huggingface"
     fallback_backend: Optional[str] = None
