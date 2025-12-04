@@ -78,6 +78,10 @@ class ReplicateBackend(BaseBackend):
                 "prompt": request.prompt,
             }
 
+            # Disable safety checker for SDXL to avoid false NSFW flags
+            if "sdxl" in self.model.lower() or "stability-ai" in self.model.lower():
+                input_params["disable_safety_checker"] = True
+
             # Adjust inference steps based on model
             # FLUX models: max 16 steps (optimized for 4)
             # SDXL/SD models: typically 20-50 steps
