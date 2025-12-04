@@ -5,6 +5,7 @@ from datetime import datetime
 from typing import Optional
 import replicate
 from replicate.exceptions import ReplicateError
+import requests
 import io
 from PIL import Image
 
@@ -132,7 +133,6 @@ class ReplicateBackend(BaseBackend):
                 image_url = output
 
             # Download the image
-            import requests
             response = requests.get(str(image_url), timeout=30)
             response.raise_for_status()
             image_data = response.content
