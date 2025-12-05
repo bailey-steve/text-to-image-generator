@@ -20,6 +20,7 @@ from src.utils.prompt_enhancer import (
 )
 from src.utils.face_restoration import get_face_restoration
 from src.utils.video_generator import get_video_generator
+from src.utils.face_animator import get_face_animator
 
 # Configure logging
 logging.basicConfig(
@@ -530,6 +531,94 @@ def generate_video(
 
     except RuntimeError as e:
         error_msg = f"❌ Video generation failed: {e}"
+        logger.error(error_msg)
+        return None, error_msg
+
+    except Exception as e:
+        error_msg = f"❌ Unexpected error: {e}"
+        logger.exception(error_msg)
+        return None, error_msg
+
+
+def animate_portrait(
+    image: Optional[Image.Image],
+    expression_scale: float = 1.0,
+    head_rotation_scale: float = 1.0,
+    blink: bool = True,
+    video_length: int = 3
+) -> Tuple[Optional[str], str]:
+    """Animate a portrait with natural facial expressions using LivePortrait.
+
+    Args:
+        image: PIL Image of a portrait
+        expression_scale: Expression intensity (0-2)
+        head_rotation_scale: Head movement amount (0-2)
+        blink: Enable blinking
+        video_length: Duration in seconds (1-10)
+
+    Returns:
+        Tuple of (video file path or None, status message)
+    """
+    if image is None:
+        return None, "Error: Please upload a portrait image"
+
+    if not settings.replicate_token:
+        return None, "❌ Error: Replicate API token required for face animation"
+
+    try:
+        logger.info(
+            f"Animating portrait: expression={expression_scale}, "
+            f"rotation={head_rotation_scale}, blink={blink}, length={video_length}s"
+        )
+
+        # Convert PIL Image to bytes
+        img_byte_arr = io.BytesIO()
+        image.save(img_byte_arr, format='PNG')
+        image_bytes = img_byte_arr.getvalue()
+
+        # Get face animator instance
+        face_anim = get_face_animator(settings.replicate_token)
+
+        # Animate face
+        video_bytes = face_anim.animate_face(
+            image_data=image_bytes,
+            expression_scale=expression_scale,
+            head_rotation_scale=head_rotation_scale,
+            blink=blink,
+            video_length=video_length
+        )
+
+        # Save video to temporary file
+        import tempfile
+        temp_file = tempfile.NamedTemporaryFile(delete=False, suffix='.mp4')
+        temp_file.write(video_bytes)
+        temp_file.close()
+
+        info_message = (
+            f"✅ Portrait animated successfully!\n"
+            f"Model: LivePortrait\n"
+            f"Duration: {video_length} seconds\n"
+            f"Expression Scale: {expression_scale}\n"
+            f"Head Rotation: {head_rotation_scale}\n"
+            f"Blinking: {'Enabled' if blink else 'Disabled'}\n"
+            f"Cost: ~$0.02"
+        )
+
+        logger.info("Face animation completed")
+        return temp_file.name, info_message
+
+    except ValueError as e:
+        error_msg = f"❌ Invalid parameters: {e}"
+        logger.error(error_msg)
+        return None, error_msg
+
+    except ConnectionError as e:
+        error_msg = f"❌ Connection error: {e}"
+        logger.error(error_msg)
+        return None, error_msg
+
+    except RuntimeError as e:
+        error_msg = f"❌ Face animation failed: {e}"
         logger.error(error_msg)
         return None, error_msg
 
@@ -1407,6 +1496,14 @@ def create_ui():
                             show_label=True
                         )
 
+                        # Portrait mode toggle
+                        img2vid_portrait_mode = gr.Checkbox(
+                            label="Portrait Mode (Face Animation)",
+                            value=False,
+                            info="Use LivePortrait for realistic facial expressions and movements"
+                        )
+
+                        # General video settings (shown when portrait mode is OFF)
                         img2vid_fps_slider = gr.Slider(
                             minimum=1,
                             maximum=30,
@@ -1430,6 +1527,44 @@ def create_ui():
                             value=14,
                             label="Number of Frames",
                             info="14 frames (faster) or 25 frames (smoother, costs more)"
+                        )
+
+                        # Portrait-specific settings (shown when portrait mode is ON)
+                        img2vid_expression_slider = gr.Slider(
+                            minimum=0.0,
+                            maximum=2.0,
+                            value=1.0,
+                            step=0.1,
+                            label="Expression Intensity",
+                            info="0=neutral, 1=natural, 2=exaggerated",
+                            visible=False
+                        )
+
+                        img2vid_head_rotation_slider = gr.Slider(
+                            minimum=0.0,
+                            maximum=2.0,
+                            value=1.0,
+                            step=0.1,
+                            label="Head Movement",
+                            info="0=still, 1=natural, 2=dramatic",
+                            visible=False
+                        )
+
+                        img2vid_blink_checkbox = gr.Checkbox(
+                            label="Enable Blinking",
+                            value=True,
+                            info="Add natural eye blinks",
+                            visible=False
+                        )
+
+                        img2vid_duration_slider = gr.Slider(
+                            minimum=1,
+                            maximum=10,
+                            value=3,
+                            step=1,
+                            label="Video Duration (seconds)",
+                            info="1-10 seconds",
+                            visible=False
                         )
 
                         img2vid_generate_btn = gr.Button("🎬 Generate Video", variant="primary", size="lg")
@@ -1586,14 +1721,89 @@ def create_ui():
             outputs=[img2img_output_image, img2img_output_info, img2img_enhance_faces_btn, img2img_fidelity_slider]
         )
 
-        # Image-to-Video event handler
-        img2vid_generate_btn.click(
-            fn=generate_video,
-            inputs=[
-                img2vid_input_image,
+        # Image-to-Video mode toggle handler
+        def toggle_video_controls(portrait_mode):
+            """Toggle visibility of controls based on portrait mode."""
+            if portrait_mode:
+                # Show portrait controls, hide general controls
+                return (
+                    gr.update(visible=False),  # fps
+                    gr.update(visible=False),  # motion
+                    gr.update(visible=False),  # frames
+                    gr.update(visible=True),   # expression
+                    gr.update(visible=True),   # head_rotation
+                    gr.update(visible=True),   # blink
+                    gr.update(visible=True),   # duration
+                )
+            else:
+                # Show general controls, hide portrait controls
+                return (
+                    gr.update(visible=True),   # fps
+                    gr.update(visible=True),   # motion
+                    gr.update(visible=True),   # frames
+                    gr.update(visible=False),  # expression
+                    gr.update(visible=False),  # head_rotation
+                    gr.update(visible=False),  # blink
+                    gr.update(visible=False),  # duration
+                )
+
+        img2vid_portrait_mode.change(
+            fn=toggle_video_controls,
+            inputs=[img2vid_portrait_mode],
+            outputs=[
                 img2vid_fps_slider,
                 img2vid_motion_slider,
-                img2vid_frames_radio
+                img2vid_frames_radio,
+                img2vid_expression_slider,
+                img2vid_head_rotation_slider,
+                img2vid_blink_checkbox,
+                img2vid_duration_slider
+            ]
+        )
+
+        # Image-to-Video generation handler
+        def generate_video_or_portrait(
+            image,
+            portrait_mode,
+            # General video params
+            fps,
+            motion,
+            frames,
+            # Portrait params
+            expression,
+            head_rotation,
+            blink,
+            duration
+        ):
+            """Generate video using either SVD or LivePortrait based on mode."""
+            if portrait_mode:
+                return animate_portrait(
+                    image,
+                    expression_scale=expression,
+                    head_rotation_scale=head_rotation,
+                    blink=blink,
+                    video_length=duration
+                )
+            else:
+                return generate_video(
+                    image,
+                    fps=fps,
+                    motion_intensity=motion,
+                    num_frames=frames
+                )
+
+        img2vid_generate_btn.click(
+            fn=generate_video_or_portrait,
+            inputs=[
+                img2vid_input_image,
+                img2vid_portrait_mode,
+                img2vid_fps_slider,
+                img2vid_motion_slider,
+                img2vid_frames_radio,
+                img2vid_expression_slider,
+                img2vid_head_rotation_slider,
+                img2vid_blink_checkbox,
+                img2vid_duration_slider
             ],
             outputs=[img2vid_output_video, img2vid_output_info]
         )
