@@ -21,8 +21,8 @@ class FaceAnimator:
         client: Replicate client instance
     """
 
-    # LivePortrait model on Replicate
-    LIVEPORTRAIT_MODEL = "fofr/live-portrait:7c1efc2c4af37288debb6167e87e60da8c55fa952c13e8684bfef5cab1f3fc9f"
+    # SadTalker model on Replicate for face animation
+    SADTALKER_MODEL = "cjwbw/sadtalker:3aa3dac9353cc4d6bd62a35e0f07966220b3e3d401ca4e04c6f3cb5f029f20ee"
 
     def __init__(self, api_key: str):
         """Initialize the face animator.
@@ -38,7 +38,7 @@ class FaceAnimator:
 
         self.api_key = api_key
         self.client = replicate.Client(api_token=api_key)
-        logger.info("Initialized FaceAnimator with LivePortrait model")
+        logger.info("Initialized FaceAnimator with SadTalker model")
 
     def animate_face(
         self,
@@ -105,16 +105,23 @@ class FaceAnimator:
 
             data_uri = f"data:{mime_type};base64,{image_base64}"
 
-            # Run LivePortrait model
-            logger.debug("Calling Replicate LivePortrait API")
+            # Map our parameters to SadTalker parameters
+            # pose_style: 0-45, map head_rotation_scale (0-2) to pose range
+            pose_style = int(head_rotation_scale * 22)  # 0-2 -> 0-44
+
+            # still mode: use when minimal head rotation
+            still_mode = head_rotation_scale < 0.3
+
+            # Run SadTalker model
+            logger.debug("Calling Replicate SadTalker API")
             output = self.client.run(
-                self.LIVEPORTRAIT_MODEL,
+                self.SADTALKER_MODEL,
                 input={
-                    "image": data_uri,
+                    "source_image": data_uri,
                     "expression_scale": expression_scale,
-                    "head_rotation_scale": head_rotation_scale,
-                    "enable_blink": blink,
-                    "video_length": video_length
+                    "pose_style": pose_style,
+                    "still": still_mode,
+                    "preprocess": "crop"
                 }
             )
 

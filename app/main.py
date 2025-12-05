@@ -596,12 +596,11 @@ def animate_portrait(
 
         info_message = (
             f"✅ Portrait animated successfully!\n"
-            f"Model: LivePortrait\n"
-            f"Duration: {video_length} seconds\n"
+            f"Model: SadTalker\n"
+            f"Duration: ~{video_length} seconds\n"
             f"Expression Scale: {expression_scale}\n"
             f"Head Rotation: {head_rotation_scale}\n"
-            f"Blinking: {'Enabled' if blink else 'Disabled'}\n"
-            f"Cost: ~$0.02"
+            f"Cost: ~$0.01-0.02"
         )
 
         logger.info("Face animation completed")
@@ -1500,7 +1499,7 @@ def create_ui():
                         img2vid_portrait_mode = gr.Checkbox(
                             label="Portrait Mode (Face Animation)",
                             value=False,
-                            info="Use LivePortrait for realistic facial expressions and movements"
+                            info="Use SadTalker AI for realistic facial expressions and movements"
                         )
 
                         # General video settings (shown when portrait mode is OFF)

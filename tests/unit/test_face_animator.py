@@ -222,7 +222,7 @@ class TestFaceAnimator:
         assert result == b'animated_video_data'
         # Verify JPEG format was detected
         call_args = mock_client_instance.run.call_args
-        assert "image/jpeg" in call_args[1]["input"]["image"]
+        assert "image/jpeg" in call_args[1]["input"]["source_image"]
 
     def test_animate_face_with_custom_parameters(
         self,
@@ -245,12 +245,14 @@ class TestFaceAnimator:
         )
 
         assert result == b'animated_video_data'
-        # Verify parameters were passed correctly
+        # Verify parameters were passed correctly (mapped to SadTalker parameters)
         call_args = mock_client_instance.run.call_args
         assert call_args[1]["input"]["expression_scale"] == 1.5
-        assert call_args[1]["input"]["head_rotation_scale"] == 0.5
-        assert call_args[1]["input"]["enable_blink"] is False
-        assert call_args[1]["input"]["video_length"] == 5
+        # head_rotation_scale 0.5 maps to pose_style = int(0.5 * 22) = 11
+        assert call_args[1]["input"]["pose_style"] == 11
+        # head_rotation_scale 0.5 > 0.3, so still should be False
+        assert call_args[1]["input"]["still"] is False
+        assert call_args[1]["input"]["preprocess"] == "crop"
 
 
 class TestGlobalFaceAnimator:
