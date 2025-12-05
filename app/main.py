@@ -19,6 +19,7 @@ from src.utils.prompt_enhancer import (
     PromptLibrary
 )
 from src.utils.face_restoration import get_face_restoration
+from src.utils.video_generator import get_video_generator
 
 # Configure logging
 logging.basicConfig(
@@ -454,6 +455,88 @@ def enhance_faces(
         error_msg = f"❌ Unexpected error: {e}"
         logger.exception(error_msg)
         return image, error_msg, True, True
+
+
+def generate_video(
+    image: Optional[Image.Image],
+    fps: int = 6,
+    motion_intensity: int = 127,
+    num_frames: int = 14
+) -> Tuple[Optional[str], str]:
+    """Generate a video from a still image using Stable Video Diffusion.
+
+    Args:
+        image: PIL Image to animate
+        fps: Frames per second (1-30)
+        motion_intensity: Motion amount (1-255)
+        num_frames: Number of frames (14 or 25)
+
+    Returns:
+        Tuple of (video file path or None, status message)
+    """
+    if image is None:
+        return None, "Error: Please upload an input image"
+
+    if not settings.replicate_token:
+        return None, "❌ Error: Replicate API token required for video generation"
+
+    try:
+        logger.info(f"Generating video: fps={fps}, motion={motion_intensity}, frames={num_frames}")
+
+        # Convert PIL Image to bytes
+        img_byte_arr = io.BytesIO()
+        image.save(img_byte_arr, format='PNG')
+        image_bytes = img_byte_arr.getvalue()
+
+        # Get video generator instance
+        video_gen = get_video_generator(settings.replicate_token)
+
+        # Generate video
+        video_bytes = video_gen.generate_video(
+            image_data=image_bytes,
+            fps=fps,
+            motion_bucket_id=motion_intensity,
+            num_frames=num_frames
+        )
+
+        # Save video to temporary file
+        import tempfile
+        temp_file = tempfile.NamedTemporaryFile(delete=False, suffix='.mp4')
+        temp_file.write(video_bytes)
+        temp_file.close()
+
+        info_message = (
+            f"✅ Video generated successfully!\n"
+            f"Model: Stable Video Diffusion\n"
+            f"Duration: {num_frames / fps:.1f} seconds\n"
+            f"FPS: {fps}\n"
+            f"Motion Intensity: {motion_intensity}\n"
+            f"Frames: {num_frames}\n"
+            f"Cost: ~$0.01"
+        )
+
+        logger.info("Video generation completed")
+        return temp_file.name, info_message
+
+    except ValueError as e:
+        error_msg = f"❌ Invalid parameters: {e}"
+        logger.error(error_msg)
+        return None, error_msg
+
+    except ConnectionError as e:
+        error_msg = f"❌ Connection error: {e}"
+        logger.error(error_msg)
+        return None, error_msg
+
+    except RuntimeError as e:
+        error_msg = f"❌ Video generation failed: {e}"
+        logger.error(error_msg)
+        return None, error_msg
+
+    except Exception as e:
+        error_msg = f"❌ Unexpected error: {e}"
+        logger.exception(error_msg)
+        return None, error_msg
 
 
 def generate_image(
@@ -1310,6 +1393,70 @@ def create_ui():
                     inputs=[img2img_prompt_input, img2img_strength_slider],
                 )
 
+            # Image-to-Video Tab
+            with gr.Tab("🎬 Image-to-Video"):
+                gr.Markdown("Animate a still image using Stable Video Diffusion. Upload an image and bring it to life with AI-generated motion!")
+
+                with gr.Row():
+                    with gr.Column(scale=1):
+                        # Input image upload
+                        img2vid_input_image = gr.Image(
+                            label="Input Image",
+                            type="pil",
+                            sources=["upload", "clipboard"],
+                            show_label=True
+                        )
+
+                        img2vid_fps_slider = gr.Slider(
+                            minimum=1,
+                            maximum=30,
+                            value=6,
+                            step=1,
+                            label="Frames Per Second (FPS)",
+                            info="Higher FPS = smoother motion"
+                        )
+
+                        img2vid_motion_slider = gr.Slider(
+                            minimum=1,
+                            maximum=255,
+                            value=127,
+                            step=1,
+                            label="Motion Intensity",
+                            info="Higher values = more dramatic motion"
+                        )
+
+                        img2vid_frames_radio = gr.Radio(
+                            choices=[14, 25],
+                            value=14,
+                            label="Number of Frames",
+                            info="14 frames (faster) or 25 frames (smoother, costs more)"
+                        )
+
+                        img2vid_generate_btn = gr.Button("🎬 Generate Video", variant="primary", size="lg")
+
+                    with gr.Column(scale=1):
+                        # Output
+                        img2vid_output_video = gr.Video(
+                            label="Generated Video",
+                            show_label=True
+                        )
+
+                        img2vid_output_info = gr.Textbox(
+                            label="Generation Info",
+                            lines=8,
+                            interactive=False
+                        )
+
+                # Examples
+                gr.Examples(
+                    examples=[
+                        [6, 127, 14],
+                        [8, 180, 14],
+                        [6, 80, 25],
+                    ],
+                    inputs=[img2vid_fps_slider, img2vid_motion_slider, img2vid_frames_radio],
+                )
+
         # Event handlers
         gen_event = generate_btn.click(
             fn=generate_image,
@@ -1437,6 +1584,18 @@ def create_ui():
             fn=enhance_faces,
             inputs=[img2img_output_image, img2img_fidelity_slider],
             outputs=[img2img_output_image, img2img_output_info, img2img_enhance_faces_btn, img2img_fidelity_slider]
+        )
+
+        # Image-to-Video event handler
+        img2vid_generate_btn.click(
+            fn=generate_video,
+            inputs=[
+                img2vid_input_image,
+                img2vid_fps_slider,
+                img2vid_motion_slider,
+                img2vid_frames_radio
+            ],
+            outputs=[img2vid_output_video, img2vid_output_info]
         )
 
         # Aspect ratio preset handlers
